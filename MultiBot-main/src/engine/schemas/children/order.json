@@ -1,0 +1,229 @@
+{
+  "name": "order",
+  "description": "Сопровождение заказа после создания. Создание и подтверждение — в main.json. OrderManager шлёт system-events вида order_status_*.",
+  "actions": {
+    "sendOrderProcessing": {
+      "type": "sendOrderProcessing"
+    },
+    "sendOrderProcessingUnconditional": {
+      "type": "sendOrderProcessing",
+      "params": { "unconditional": true }
+    },
+    "sendOrderApproved": {
+      "type": "sendOrderApproved"
+    },
+    "sendOrderDriverArrived": {
+      "type": "sendL10n",
+      "params": { "key": "wab_driverArrived", "lang": { "var": "user.lang" } }
+    },
+    "sendOrderDriverStarted": {
+      "type": "sendL10n",
+      "params": { "key": "wab_driverStarted", "lang": { "var": "user.lang" } }
+    },
+    "sendOrderDriverCanceled": {
+      "type": "sendL10n",
+      "params": { "key": "wab_driverCanceled", "lang": { "var": "user.lang" } }
+    },
+    "sendOrderCompleted": {
+      "type": "sendOrderCompleted"
+    },
+    "sendOrderOutOfTime": {
+      "type": "sendL10n",
+      "params": { "key": "wab_outOfTime", "lang": { "var": "user.lang" } }
+    },
+    "sendOrderCanceled": {
+      "type": "sendL10n",
+      "params": { "key": "wab_orderCanceled", "lang": { "var": "user.lang" } }
+    },
+    "sendReviewPrompt": {
+      "type": "sendL10n",
+      "params": { "key": "wab_rateSet", "lang": { "var": "user.lang" } }
+    },
+    "sendRatingError": {
+      "type": "sendL10n",
+      "params": { "key": "wab_youenterincorrectcommand", "lang": { "var": "user.lang" } }
+    },
+    "sendReviewThanks": {
+      "type": "sendL10n",
+      "params": { "key": "wab_commentReceived", "lang": { "var": "user.lang" } }
+    },
+    "setRate": { "type": "setRate" },
+    "setReview": { "type": "setReview" },
+    "cancelOrder": {
+      "type": "apiCall",
+      "endpoint": "/drive/cancel",
+      "params": {
+        "source": "fsm_data",
+        "orderVar": "order.id",
+        "reasonVar": "order.cancelReason"
+      }
+    },
+    "sendCancelReasonList": {
+      "type": "sendCancelReasonList"
+    },
+    "cancelOrderWithReason": {
+      "type": "cancelOrderWithReason"
+    },
+    "sendCloseReasonSpecified": {
+      "type": "sendL10n",
+      "params": { "key": "wab_closeReasonSpecified", "lang": { "var": "user.lang" } }
+    },
+    "sendDefaultMenu": { "type": "sendL10n", "params": {"key": "wab_defaultPrompt", "lang": { "var": "user.lang" }} }
+
+  },
+  "states": {
+    "start": {
+      "id": "order.start",
+      "entryActions": [],
+      "validation": {
+        "type": "mapping",
+        "mapping": { "0": { "event": "cancel_reason_request" } },
+        "errorEvent": "message"
+      },
+      "transitions": [
+        { "event": "order_status_processing", "to": "order.start", "actions": ["sendOrderProcessing"] },
+        { "event": "order_status_approved", "to": "order.approved", "actions": ["sendOrderApproved"] },
+        { "event": "order_status_driver_arrived", "to": "order.driverArrived", "actions": ["sendOrderDriverArrived"] },
+        { "event": "order_status_driver_started", "to": "order.driverStarted", "actions": ["sendOrderDriverStarted"] },
+        { "event": "order_status_driver_canceled", "to": "order.canceled", "actions": ["sendOrderDriverCanceled"] },
+        { "event": "order_status_canceled", "to": "order.canceled", "actions": ["sendOrderCanceled"] },
+        { "event": "order_status_completed", "to": "order.completed", "actions": ["sendOrderCompleted"] },
+        { "event": "order_status_out_of_time", "to": "main.start", "actions": ["sendOrderOutOfTime","sendDefaultMenu"] },
+        { "event": "cancel_reason_request", "to": "order.cancelReason", "actions": ["sendCancelReasonList"] },
+        { "event": "message", "to": "main.default", "actions": [] }
+      ]
+    },
+
+    "cancelReason": {
+      "id": "order.cancelReason",
+      "entryActions": [],
+      "validation": {
+        "type": "choice",
+        "allowed": ["01", "1", "2", "3", "4"],
+        "mapping": {
+          "0": { "event": "cancel_reason_error" },
+          "01": { "event": "cancel_back_to_start" },
+          "1": { "event": "cancel_reason_1" },
+          "2": { "event": "cancel_reason_2" },
+          "3": { "event": "cancel_reason_3" },
+          "4": { "event": "cancel_reason_4" }
+        },
+        "errorEvent": "cancel_reason_error",
+        "successEvent": "ok"
+      },
+      "transitions": [
+        { "event": "cancel_back_to_start", "to": "order.start", "actions": ["sendOrderProcessingUnconditional"] },
+        { "event": "cancel_back_to_approved", "to": "order.approved", "actions": [] },
+        { "event": "cancel_back_to_driverArrived", "to": "order.driverArrived", "actions": [] },
+        { "event": "cancel_back_to_driverStarted", "to": "order.driverStarted", "actions": [] },
+        { "event": "cancel_reason_1", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
+        { "event": "cancel_reason_2", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
+        { "event": "cancel_reason_3", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
+        { "event": "cancel_reason_4", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
+        { "event": "cancel_reason_error", "to": "order.cancelReason", "actions": ["sendCommandNotFound"] }
+      ]
+    },
+
+    "approved": {
+      "id": "order.approved",
+      "entryActions": [],
+      "validation": {
+        "type": "mapping",
+        "mapping": { "0": { "event": "cancel_reason_request" } },
+        "errorEvent": "message"
+      },
+      "transitions": [
+        { "event": "cancel_reason_request", "to": "order.cancelReason", "actions": ["sendCancelReasonList"] },
+        { "event": "order_status_driver_arrived", "to": "order.driverArrived", "actions": ["sendOrderDriverArrived"] },
+        { "event": "order_status_driver_started", "to": "order.driverStarted", "actions": ["sendOrderDriverStarted"] },
+        { "event": "order_status_completed", "to": "order.completed", "actions": ["sendOrderCompleted"] },
+        { "event": "order_status_driver_canceled", "to": "order.canceled", "actions": ["sendOrderDriverCanceled"] },
+        { "event": "order_status_canceled", "to": "order.canceled", "actions": ["sendOrderCanceled"] }
+      ]
+    },
+
+    "driverArrived": {
+      "id": "order.driverArrived",
+      "entryActions": [],
+      "validation": {
+        "type": "mapping",
+        "mapping": { "0": { "event": "cancel_reason_request" } },
+        "errorEvent": "message"
+      },
+      "transitions": [
+        { "event": "cancel_reason_request", "to": "order.cancelReason", "actions": ["sendCancelReasonList"] },
+        { "event": "order_status_driver_started", "to": "order.driverStarted", "actions": ["sendOrderDriverStarted"] },
+        { "event": "order_status_completed", "to": "order.completed", "actions": ["sendOrderCompleted"] },
+        { "event": "order_status_driver_canceled", "to": "order.canceled", "actions": ["sendOrderDriverCanceled"] },
+        { "event": "order_status_canceled", "to": "order.canceled", "actions": ["sendOrderCanceled"] }
+      ]
+    },
+
+    "driverStarted": {
+      "id": "order.driverStarted",
+      "entryActions": [],
+      "validation": {
+        "type": "mapping",
+        "mapping": { "0": { "event": "cancel_reason_request" } },
+        "errorEvent": "message"
+      },
+      "transitions": [
+        { "event": "cancel_reason_request", "to": "order.cancelReason", "actions": ["sendCancelReasonList"] },
+        { "event": "order_status_completed", "to": "order.completed", "actions": ["sendOrderCompleted"] },
+        { "event": "order_status_driver_canceled", "to": "order.canceled", "actions": ["sendOrderDriverCanceled"] },
+        { "event": "order_status_canceled", "to": "order.canceled", "actions": ["sendOrderCanceled"] }
+      ]
+    },
+
+    "completed": {
+      "id": "order.completed",
+      "entryActions": [],
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2", "3", "4", "5"],
+        "mapping": { "0": { "event": "skip" } },
+        "errorEvent": "error",
+        "successEvent": "ok",
+        "saveAs": "order.rate"
+      },
+      "transitions": [
+        { "event": "ok", "to": "order.review", "actions": ["setRate", "sendReviewPrompt"] },
+        { "event": "skip", "to": "main.default", "actions": ["sendDefaultMenu"] },
+        { "event": "error", "to": "order.completed", "actions": ["sendRatingError"] }
+      ]
+    },
+
+    "review": {
+      "id": "order.review",
+      "entryActions": [],
+      "validation": {
+        "type": "regex",
+        "pattern": "^.+$",
+        "mapping": { "0": { "event": "skip" } },
+        "errorEvent": "skip",
+        "successEvent": "ok",
+        "saveAs": "order.review"
+      },
+      "transitions": [
+        { "event": "ok", "to": "main.default", "actions": ["setReview", "sendReviewThanks", "sendDefaultMenu"] },
+        { "event": "skip", "to": "main.default", "actions": ["sendDefaultMenu"] }
+      ]
+    },
+
+    "outOfTime": {
+      "id": "order.outOfTime",
+      "entryActions": [],
+      "transitions": [
+        { "event": "message", "to": "main.default", "actions": ["sendDefaultMenu"] }
+      ]
+    },
+
+    "canceled": {
+      "id": "order.canceled",
+      "entryActions": [],
+      "transitions": [
+        { "event": "message", "to": "main.default", "actions": ["sendDefaultMenu"] }
+      ]
+    }
+  }
+}

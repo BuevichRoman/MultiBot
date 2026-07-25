@@ -1,0 +1,312 @@
+{
+  "name": "registration",
+  "description": "Регистрация новых пользователей",
+  "actions": {
+    "promptSelectLanguage": {
+      "type": "sendL10n",
+      "params": { "key": "wab_selectLanguage", "lang": "2" }
+    },
+    "promptLanguagesList": {
+      "type": "sendL10n",
+      "params": { "key": "wab_languagesList", "lang": "1" }
+    },
+    "sendWelcome": {
+      "type": "sendL10n",
+      "params": { "key": "wab_welcome", "lang": { "var": "registration.lang" } }
+    },
+    "promptFullName": {
+      "type": "sendL10n",
+      "params": {"key": "wab_enterFirstNameLastNameAndBirthYear", "lang": { "var": "registration.lang" } }
+    },
+    "promptPhone": {
+      "type": "sendL10n",
+      "params": { "key": "wab_enterPhoneNumber", "lang": { "var": "registration.lang" } }
+    },
+    "promptCity": {
+      "type": "sendL10n",
+      "params": { "key": "wab_enterCity", "lang": { "var": "registration.lang" } }
+    },
+    "promptPublicOffer": {
+      "type": "sendBotLegalDocs",
+      "params": {
+        "key": "site_constants.bot_legal_docs.value.public_offer",
+        "lang": { "var": "registration.lang" }
+      }
+    },
+    "promptPrivacyPolicy": {
+      "type": "sendBotLegalDocs",
+      "params": { "key": "site_constants.bot_legal_docs.value.privacy_policy", "lang": { "var": "registration.lang" } }
+    },
+    "promptLegalInfo": {
+      "type": "sendBotLegalDocs",
+      "params": {
+        "key": "site_constants.bot_legal_docs.value.legal_information",
+        "lang": { "var": "registration.lang" },
+        "replace":
+        {"%action%":
+          {"type": "l10n","key": "wab_childrenDocsActionContinueRegistration", "lang": { "var": "registration.lang" } }
+        }
+      }
+    },
+    "promptAcceptDocs": {
+      "type": "sendL10n",
+      "params": { "key": "wab_pleaseAcceptDocs", "lang": { "var": "registration.lang" } }
+    },
+    "sendCommandNotFound": {
+      "type": "sendL10n",
+      "params": {"key": "wab_commandNotFound", "lang": { "var": "registration.lang" } }
+    },
+    "sendRegistrationSuccessful": {
+      "type": "sendL10n",
+      "params": { "key": "wab_registrationSuccessful", "lang": { "var": "registration.lang" } }
+    },
+    "sendNeedToAcceptDocsRegistration": {
+      "type": "sendL10n",
+      "params": { "key": "wab_docsDeclinedCanNotUseRegistration", "lang": { "var": "registration.lang" } }
+    },
+    "sendFullNameError": {
+      "type": "sendL10n",
+      "params": {"key": "wab_enterFirstNameLastNameAndBirthYearError", "lang": { "var": "registration.lang" } }
+    },
+    "register": {
+      "type": "apiCall",
+      "endpoint": "/register"
+    },
+    "saveLang": {
+      "type": "save",
+      "params": {
+        "var": { "type": "registration", "name": "lang" },
+        "map": {"1": "2", "2": "3", "3": "5", "4": "6",
+          "5": "4", "6": "7", "7": "8", "8": "1","9": "9","10": "10"}
+      }
+    },
+    "ensureChildrenDocsInFsm": { "type": "ensureChildrenDocsInFsm" },
+    "markChildrenDocAcceptedPublic": {
+      "type": "markChildrenDocAccepted",
+      "params": { "doc": "public_offer" }
+    },
+    "markChildrenDocAcceptedPrivacy": {
+      "type": "markChildrenDocAccepted",
+      "params": { "doc": "privacy_policy" }
+    },
+    "markChildrenDocAcceptedLegal": {
+      "type": "markChildrenDocAccepted",
+      "params": { "doc": "legal_information" }
+    }
+  },
+  "states": {
+    "start": {
+      "id": "registration.start",
+      "transitions": [
+        {
+          "event": "message",
+          "to": "registration.collection_language",
+          "actions": ["promptSelectLanguage", "promptLanguagesList"]
+        }
+      ]
+    },
+    "collection_language": {
+      "id": "registration.collection_language",
+      "validation": {
+        "type": "choice",
+        "allowed": ["8"],
+        "mapping": {
+          "0": {"event": "validation_failed"}
+        },
+        "errorEvent": "validation_failed",
+        "successEvent": "language_selected"
+      },
+      "actions": {
+        "saveLang": {
+          "type": "save",
+          "params": {
+            "map": {"1": "2", "2": "3", "3": "5", "4": "6",
+              "5": "4", "6": "7", "7": "8", "8": "1","9": "10","10": "10"},
+            "var": {
+              "type": "registration",
+              "name": "lang"
+            }
+          }
+        }
+      },
+      "transitions": [
+        {
+          "event": "language_selected",
+          "to": "registration.children_welcome",
+          "actions": ["saveLang","sendWelcome"]
+        },
+        {
+          "event": "validation_failed",
+          "to": "registration.collection_language",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "children_welcome": {
+      "id": "registration.children_welcome",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1"],
+        "errorEvent": "error",
+        "successEvent": "ok"
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "registration.children_docs_publicOffer",
+          "actions": ["ensureChildrenDocsInFsm", "promptPublicOffer"]
+        },
+        {
+          "event": "error",
+          "to": "registration.children_welcome",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+
+    "children_docs_publicOffer": {
+      "id": "registration.children_docs_publicOffer",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2", "yes", "no", "accept", "decline", "да", "нет"],
+        "mapping": {
+          "1": {"event": "ok"}, "yes": {"event": "ok"}, "accept": {"event": "ok"}, "да": {"event": "ok"},
+          "2": {"event": "decline"}, "no": {"event": "decline"}, "decline": {"event": "decline"}, "нет": {"event": "decline"}
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "registration.children_docs_privacyPolicy",
+          "actions": ["markChildrenDocAcceptedPublic", "promptPrivacyPolicy"]
+        },
+        {
+          "event": "decline",
+          "to": "registration.children_docs_publicOffer",
+          "actions": ["sendNeedToAcceptDocsRegistration"]
+        },
+        {
+          "event": "error",
+          "to": "registration.children_docs_publicOffer",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "children_docs_privacyPolicy": {
+      "id": "registration.children_docs_privacyPolicy",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2", "yes", "no", "accept", "decline", "да", "нет"],
+        "mapping": {
+          "1": {"event": "ok"}, "yes": {"event": "ok"}, "accept": {"event": "ok"}, "да": {"event": "ok"},
+          "2": {"event": "decline"}, "no": {"event": "decline"}, "decline": {"event": "decline"}, "нет": {"event": "decline"}
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "registration.children_docs_legalInfo",
+          "actions": ["markChildrenDocAcceptedPrivacy", "promptLegalInfo"]
+        },
+        {
+          "event": "decline",
+          "to": "registration.children_docs_privacyPolicy",
+          "actions": ["sendNeedToAcceptDocsRegistration"]
+        },
+        {
+          "event": "error",
+          "to": "registration.children_docs_privacyPolicy",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "children_docs_legalInfo": {
+      "id": "registration.children_docs_legalInfo",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2", "yes", "no", "accept", "decline", "да", "нет"],
+        "mapping": {
+          "1": {"event": "ok"}, "yes": {"event": "ok"}, "accept": {"event": "ok"}, "да": {"event": "ok"},
+          "2": {"event": "decline"}, "no": {"event": "decline"}, "decline": {"event": "decline"}, "нет": {"event": "decline"}
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "registration.collectionFullName",
+          "actions": ["markChildrenDocAcceptedLegal", "promptFullName"]
+        },
+        {
+          "event": "decline",
+          "to": "registration.children_docs_legalInfo",
+          "actions": ["sendNeedToAcceptDocsRegistration"]
+        },
+        {
+          "event": "error",
+          "to": "registration.children_docs_legalInfo",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "collectionFullName": {
+      "id": "registration.collectionFullName",
+      "customValidation": {
+        "format": "FirstName LastName YYYY",
+        "minAge": 18,
+        "saveFields": ["firstName", "lastName", "birthYear"]
+      },
+      "entryActions": [],
+      "transitions": [
+        {
+          "event": "full_name_valid",
+          "to": "registration.children_collectionPhone",
+          "actions": ["promptPhone"]
+        },
+        {
+          "event": "full_name_invalid",
+          "to": "registration.collectionFullName",
+          "actions": ["sendFullNameError"]
+        }
+      ]
+    },
+    "children_collectionPhone": {
+      "id": "registration.children_collectionPhone",
+      "validation": {
+        "type": "regex",
+        "pattern": "^.+$",
+        "successEvent": "message",
+        "errorEvent": "message",
+        "saveAs": "phone"
+      },
+      "entryActions": [],
+      "transitions": [
+        {
+          "event": "message",
+          "to": "registration.children_collectionCity",
+          "actions": ["promptCity"]
+        }
+      ]
+    },
+    "children_collectionCity": {
+      "id": "registration.children_collectionCity",
+      "validation": {
+        "type": "regex",
+        "pattern": "^.+$",
+        "successEvent": "message",
+        "errorEvent": "message",
+        "saveAs": "city"
+      },
+      "entryActions": [],
+      "transitions": [
+        {
+          "event": "message",
+          "to": "main.start",
+          "actions": ["register","sendRegistrationSuccessful"]
+        }
+      ]
+    }
+  }
+}

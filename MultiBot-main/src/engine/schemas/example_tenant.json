@@ -1,0 +1,26 @@
+{
+  "tenantId": "example_tenant",
+  "initialState": "start",
+  "states": {
+    "start": {
+      "id": "start",
+      "entryActions": ["sendWelcome"],
+      "transitions": [
+        { "event": "message", "to": "asked_name", "actions": ["askName"] }
+      ]
+    },
+    "asked_name": {
+      "id": "asked_name",
+      "transitions": [
+        { "event": "name_provided", "to": "done", "actions": ["storeName", "sayThanks"] }
+      ]
+    },
+    "done": { "id": "done" }
+  },
+  "actions": {
+    "sendWelcome": { "type": "sendMessage", "params": { "text": "Welcome!" } },
+    "askName": { "type": "sendMessage", "params": { "text": "What's your name?" } },
+    "storeName": { "type": "store", "params": { "field": "name" } },
+    "sayThanks": { "type": "sendMessage", "params": { "text": "Thanks!" } }
+  }
+}

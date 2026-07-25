@@ -1,0 +1,39 @@
+{
+  "api": {
+    "default-api": {
+      "url": "https://example.com/taxi/c/children/api/v1/",
+      "adminCredentials": {
+        "login": "admin@example.com",
+        "password": "CHANGE_ME",
+        "type": "e-mail"
+      },
+      "adminAuthFile": "data/default-api.json"
+    }
+  },
+  "tenantOverrides": {
+    "children": { "testRefCode": "666" }
+  },
+  "bots": {
+    "test-adapter-bot": {
+      "api": "default-api",
+      "transport": { "type": "test" },
+      "core": { "name": "children" }
+    },
+    "test-bot": {
+      "api": "default-api",
+      "transport": {
+        "type": "telegram-bot-polling",
+        "token": "YOUR_TELEGRAM_BOT_TOKEN"
+      },
+      "core": { "name": "children" }
+    },
+    "test-whatsapp-bot": {
+      "api": "default-api",
+      "transport": {
+        "type": "whatsapp-web-polling",
+        "sessionDir": "data/wwebjs_session"
+      },
+      "core": { "name": "children" }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "redis": {
+    "host": "127.0.0.1",
+    "port": 6379,
+    "password": ""
+  },
+  "engine": {
+    "schemasPath": "src/engine/schemas",
+    "flushRedisOnStartup": true
+  },
+  "orchestrator": {
+    "configPath": "config/orchestrator.json",
+    "skipApiLogin": false
+  },
+  "logging": {
+    "serviceName": "taxi-bot-children"
+  }
+}

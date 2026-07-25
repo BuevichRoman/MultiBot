@@ -1,0 +1,26 @@
+{
+  "api": {
+    "a3e4bbff": {
+      "url": "https://example.com/api/v1/",
+      "adminCredentials": {
+        "login": "admin@example.com",
+        "password": "CHANGE_ME",
+        "type": "e-mail"
+      },
+      "adminAuthFile": "data/default-api.json"
+    }
+  },
+  "bots": {
+    "childrenTelegram": {
+      "api": "a3e4bbff",
+      "transport": {
+        "type": "telegram-bot-polling",
+        "token": "BOT_TOKEN"
+      },
+      "core": {
+        "name": "children",
+        "version": 0
+      }
+    }
+  }
+}

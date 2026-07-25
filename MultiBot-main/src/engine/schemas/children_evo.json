@@ -1,0 +1,414 @@
+{
+  "tenantId": "children",
+  "initialState": "start",
+  "version": "2.0",
+  "metadata": {
+    "name": "Children Registration Flow",
+    "description": "Multi-step registration with document acceptance",
+    "created": "2024-01-01T00:00:00Z",
+    "updated": "2024-01-01T00:00:00Z",
+    "author": "System",
+    "tags": ["registration", "documents", "onboarding"],
+    "locale": {
+      "defaultLanguage": "ru",
+      "supportedLanguages": ["ru", "en", "kk"],
+      "fallbackLanguage": "ru"
+    }
+  },
+
+  "variables": {
+    "user": {
+      "type": "object",
+      "persist": true,
+      "fields": {
+        "fullName": { "type": "string", "required": true, "pattern": "^[A-Za-zА-Яа-я]+ [A-Za-zА-Яа-я]+ \\d{4}$" },
+        "birthYear": { "type": "number", "min": 1900, "max": 2024 },
+        "phone": { "type": "string", "pattern": "^\\+?[0-9]{10,15}$", "required": true },
+        "city": { "type": "string", "required": true },
+        "lang": {
+          "type": "object",
+          "fields": {
+            "api_id": { "type": "string" },
+            "iso": { "type": "string" }
+          }
+        },
+        "registered": { "type": "boolean", "default": false },
+        "documentsAccepted": { "type": "boolean", "default": false }
+      }
+    },
+    "session": {
+      "type": "object",
+      "persist": false,
+      "fields": {
+        "lastMessageTime": { "type": "timestamp" },
+        "messageCount": { "type": "number", "default": 0 },
+        "currentDocumentIndex": { "type": "number", "default": 0 }
+      }
+    }
+  },
+
+  "states": {
+    "start": {
+      "id": "start",
+      "type": "initial",
+      "guards": ["isNewUser"],
+      "entryActions": ["clearSession"],
+      "transitions": [
+        {
+          "event": "language_selected",
+          "to": "collection_language",
+          "condition": "isValidLanguage",
+          "actions": ["saveLanguage", "promptSelectLanguage", "promptLanguagesList"]
+        }
+      ],
+      "timeout": {
+        "duration": 300000,
+        "action": "timeoutWarning",
+        "to": "start"
+      }
+    },
+
+    "collection_language": {
+      "id": "collection_language",
+      "type": "collector",
+      "collects": "lang",
+      "validation": "validateLanguage",
+      "transitions": [
+        {
+          "event": "message",
+          "to": "children_welcome",
+          "actions": ["sendWelcome", "logLanguageSelected"]
+        }
+      ]
+    },
+
+    "children_welcome": {
+      "id": "children_welcome",
+      "type": "message",
+      "entryActions": ["incrementMessageCount"],
+      "transitions": [
+        {
+          "event": "full_name_provided",
+          "to": "collectionFullName",
+          "actions": ["validateFullName"]
+        },
+        {
+          "event": "timeout",
+          "to": "children_welcome",
+          "actions": ["sendWelcomeReminder"]
+        }
+      ],
+      "timeout": {
+        "duration": 60000,
+        "action": "timeoutWarning"
+      }
+    },
+
+    "collectionFullName": {
+      "id": "collectionFullName",
+      "type": "validator",
+      "collects": "fullName",
+      "validation": "validateFullNameFormat",
+      "errorState": "collectionFullName",
+      "transitions": [
+        {
+          "event": "full_name_valid",
+          "to": "children_collectionPhone",
+          "actions": ["saveFullName", "promptPhone"]
+        },
+        {
+          "event": "full_name_invalid",
+          "to": "collectionFullName",
+          "actions": ["promptFullNameError", "incrementRetryCount"]
+        }
+      ],
+      "retryPolicy": {
+        "maxRetries": 3,
+        "retryAction": "promptFullNameError",
+        "exceededAction": "escalateToSupport"
+      }
+    },
+
+    "children_collectionPhone": {
+      "id": "children_collectionPhone",
+      "type": "collector",
+      "collects": "phone",
+      "validation": "validatePhone",
+      "transitions": [
+        {
+          "event": "phone_provided",
+          "to": "children_collectionCity",
+          "actions": ["savePhone", "promptCity"]
+        }
+      ]
+    },
+
+    "children_collectionCity": {
+      "id": "children_collectionCity",
+      "type": "collector",
+      "collects": "city",
+      "validation": "validateCity",
+      "transitions": [
+        {
+          "event": "city_provided",
+          "to": "children_documents_flow",
+          "actions": ["saveCity", "startDocumentFlow"]
+        }
+      ]
+    },
+
+    "children_documents_flow": {
+      "id": "children_documents_flow",
+      "type": "subflow",
+      "subflowId": "document_acceptance",
+      "params": {
+        "documents": ["publicOffer", "privacyPolicy", "legalInfo"],
+        "requireAll": true
+      },
+      "completionEvent": "documents_accepted",
+      "completionState": "children_registered"
+    },
+
+    "children_registered": {
+      "id": "children_registered",
+      "type": "final",
+      "entryActions": ["sendRegistrationComplete", "clearSessionData"],
+      "transitions": [
+        {
+          "event": "language_selected",
+          "to": "start",
+          "actions": ["sendWelcome"]
+        },
+        {
+          "event": "restart",
+          "to": "start",
+          "actions": ["clearUserData", "sendRestartMessage"]
+        }
+      ],
+      "webhook": {
+        "url": "https://api.example.com/registration/complete",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer ${env.API_TOKEN}"
+        },
+        "body": {
+          "userId": "${user.whatsappId}",
+          "data": "${user}"
+        },
+        "retry": {
+          "maxAttempts": 3,
+          "backoff": "exponential"
+        }
+      }
+    }
+  },
+
+  "subflows": {
+    "document_acceptance": {
+      "id": "document_acceptance",
+      "type": "sequential",
+      "states": {
+        "publicOffer": {
+          "id": "publicOffer",
+          "entryActions": ["promptPublicOffer"],
+          "transitions": [
+            { "event": "doc_accepted", "to": "privacyPolicy", "actions": ["promptPrivacyPolicy"] },
+            { "event": "doc_rejected", "to": "document_rejected", "actions": ["handleRejection"] }
+          ]
+        },
+        "privacyPolicy": {
+          "id": "privacyPolicy",
+          "entryActions": ["promptPrivacyPolicy"],
+          "transitions": [
+            { "event": "doc_accepted", "to": "legalInfo", "actions": ["promptLegalInfo"] },
+            { "event": "doc_rejected", "to": "document_rejected", "actions": ["handleRejection"] }
+          ]
+        },
+        "legalInfo": {
+          "id": "legalInfo",
+          "entryActions": ["promptLegalInfo"],
+          "transitions": [
+            { "event": "doc_accepted", "to": "acceptDocs", "actions": ["promptAcceptDocs"] },
+            { "event": "doc_rejected", "to": "document_rejected", "actions": ["handleRejection"] }
+          ]
+        },
+        "acceptDocs": {
+          "id": "acceptDocs",
+          "entryActions": ["promptAcceptDocs"],
+          "transitions": [
+            { "event": "docs_accepted", "to": "final", "actions": ["markDocumentsAccepted"] }
+          ]
+        },
+        "document_rejected": {
+          "id": "document_rejected",
+          "entryActions": ["sendRejectionMessage", "notifySupport"],
+          "type": "final"
+        }
+      }
+    }
+  },
+
+  "actions": {
+    "sendL10n": {
+      "type": "sendLocalizedMessage",
+      "params": {
+        "key": "${key}",
+        "lang": "${user.lang.iso || 'ru'}",
+        "variables": {
+          "userName": "${user.fullName}",
+          "retryCount": "${session.retryCount}"
+        }
+      }
+    },
+
+    "validatePhone": {
+      "type": "validation",
+      "validator": "phoneValidator",
+      "errorMessage": "wab_invalidPhone",
+      "transform": "normalizePhone"
+    },
+
+    "saveUserData": {
+      "type": "persist",
+      "target": "database",
+      "collection": "users",
+      "data": "${user}",
+      "merge": true
+    },
+
+    "callWebhook": {
+      "type": "http",
+      "method": "POST",
+      "url": "https://api.example.com/webhook",
+      "body": "${event.data}",
+      "async": true
+    },
+
+    "notifySupport": {
+      "type": "notification",
+      "channel": "slack",
+      "message": "User ${user.whatsappId} needs support",
+      "priority": "high"
+    },
+
+    "escalateToSupport": {
+      "type": "transfer",
+      "to": "human",
+      "queue": "support",
+      "message": "wab_escalatedToSupport"
+    },
+
+    "logEvent": {
+      "type": "logger",
+      "level": "info",
+      "message": "User ${user.whatsappId} transitioned from ${from} to ${to}"
+    }
+  },
+
+  "validators": {
+    "validateFullNameFormat": {
+      "pattern": "^[A-Za-zА-Яа-я]+ [A-za-zА-Яа-я]+ \\d{4}$",
+      "errorKey": "wab_invalidFullName"
+    },
+    "validatePhone": {
+      "pattern": "^\\+?[0-9]{10,15}$",
+      "errorKey": "wab_invalidPhone",
+      "transform": "stripNonDigits"
+    },
+    "validateCity": {
+      "minLength": 2,
+      "maxLength": 50,
+      "errorKey": "wab_invalidCity"
+    }
+  },
+
+  "guards": {
+    "isNewUser": {
+      "condition": "!user.registered",
+      "else": "children_registered"
+    },
+    "isValidLanguage": {
+      "condition": "['ru', 'en', 'kk'].includes(message.text)",
+      "else": "collection_language"
+    }
+  },
+
+  "webhooks": {
+    "onEnter": {
+      "url": "https://api.example.com/state/enter",
+      "method": "POST",
+      "headers": {
+        "X-Tenant": "${tenantId}",
+        "X-State": "${state}"
+      }
+    },
+    "onExit": {
+      "url": "https://api.example.com/state/exit",
+      "method": "POST"
+    },
+    "onComplete": {
+      "url": "https://api.example.com/flow/complete",
+      "method": "POST"
+    }
+  },
+
+  "analytics": {
+    "trackEvents": true,
+    "trackStateTransitions": true,
+    "trackUserData": true,
+    "destination": {
+      "type": "kafka",
+      "topic": "user-events",
+      "brokers": ["kafka:9092"]
+    }
+  },
+
+  "extensions": {
+    "aiAssistant": {
+      "enabled": true,
+      "provider": "openai",
+      "model": "gpt-4",
+      "prompt": "You are helping user with registration...",
+      "fallback": "human"
+    },
+    "abTesting": {
+      "enabled": true,
+      "variant": "${user.id % 2 === 0 ? 'A' : 'B'}",
+      "overrides": {
+        "A": { "welcomeMessage": "wab_welcome_variant_a" },
+        "B": { "welcomeMessage": "wab_welcome_variant_b" }
+      }
+    }
+  },
+
+  "localization": {
+    "ru": {
+      "wab_selectLanguage": "Выберите язык:",
+      "wab_welcome": "Добро пожаловать!",
+      "wab_enterPhoneNumber": "Введите номер телефона:",
+      "wab_enterCity": "Введите ваш город:"
+    },
+    "en": {
+      "wab_selectLanguage": "Select language:",
+      "wab_welcome": "Welcome!",
+      "wab_enterPhoneNumber": "Enter your phone number:",
+      "wab_enterCity": "Enter your city:"
+    },
+    "kk": {
+      "wab_selectLanguage": "Тілді таңдаңыз:",
+      "wab_welcome": "Қош келдіңіз!",
+      "wab_enterPhoneNumber": "Телефон нөміріңізді енгізіңіз:",
+      "wab_enterCity": "Қалаңызды енгізіңіз:"
+    }
+  },
+
+  "sla": {
+    "maxResponseTime": 30000,
+    "maxStateDuration": 3600000,
+    "notificationChannels": ["email", "slack"],
+    "escalationPolicy": {
+      "after": 3,
+      "action": "notifySupervisor"
+    }
+  }
+}

@@ -1,0 +1,137 @@
+ {
+  "name": "settings",
+  "description": "Флоу настроек",
+  "actions": {
+    "sendSettingsMenu": { "type": "sendSettingsMenu" },
+    "sendLanguageList": { "type": "sendLanguageList" },
+    "sendLegalInfo": { "type": "sendLegalInfo" },
+    "toggleTestMode": { "type": "toggleTestMode" },
+    "saveLanguageChange": { "type": "saveLanguageChange" },
+    "sendAskDeleteAccount": { "type": "sendL10n", "params": {"key": "wab_askdeleteaccount", "lang": { "var": "user.lang" }} },
+    "sendEnterFullNameAndBirthYear": { "type": "sendL10n", "params": {"key": "wab_enterfirstnamelastnameandbirthyear", "lang": { "var": "user.lang" }} },
+    "sendEnterPhoneNumber": { "type": "sendL10n", "params": {"key": "wab_enterphonenumber", "lang": { "var": "user.lang" }} },
+    "sendEnterCity": { "type": "sendL10n", "params": {"key": "wab_entercity", "lang": { "var": "user.lang" }} },
+    "sendEnterFullNameAndBirthYearError": { "type": "sendL10n", "params": {"key": "wab_enterfirstnamelastnameandbirthyearerror", "lang": { "var": "user.lang" }} },
+    "sendAccountDeletionCanceled": { "type": "sendL10n", "params": {"key": "wab_accountdeletioncanceled", "lang": { "var": "user.lang" }} },
+    "deleteAccount": { "type": "deleteAccount" },
+    "saveFullNameAndBirthYear": { "type": "saveFullNameAndBirthYear" },
+    "savePhone": { "type": "savePhone" },
+    "saveCity": { "type": "saveCity" },
+    "sendCommandNotFound": { "type": "sendL10n", "params": {"key": "wab_commandNotFound", "lang": { "var": "user.lang" }} },
+    "sendDefaultMenu": { "type": "sendL10n", "params": {"key": "wab_defaultPrompt", "lang": { "var": "user.lang" }} }
+  },
+  "states": {
+    "start": {
+      "id": "settings.start",
+      "validation": {
+        "type": "choice",
+        "allowed": ["0", "1", "2", "3", "4", "5", "6", "7"],
+        "mapping": {
+          "0": {"event": "back"},
+          "1": {"event": "change_language"},
+          "2": {"event": "legal_info"},
+          "3": {"event": "toggle_test"},
+          "4": {"event": "delete_account"},
+          "5": {"event": "change_personal_data"},
+          "6": {"event": "change_phone"},
+          "7": {"event": "change_city"}
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {"event": "back", "to": "main.start", "actions": ["sendDefaultMenu"]},
+        {"event": "change_language", "to": "settings.changeLanguage", "actions": ["sendLanguageList"]},
+        {"event": "legal_info", "to": "settings.settingsLegalInfo", "actions": ["sendLegalInfo"]},
+        {"event": "toggle_test", "to": "settings.start", "actions": ["toggleTestMode", "sendSettingsMenu"]},
+        {"event": "delete_account", "to": "settings.askDeleteAccount", "actions": ["sendAskDeleteAccount"]},
+        {"event": "change_personal_data", "to": "settings.collectionFullNameAndBirthYear", "actions": ["sendEnterFullNameAndBirthYear"]},
+        {"event": "change_phone", "to": "settings.collectionPhone", "actions": ["sendEnterPhoneNumber"]},
+        {"event": "change_city", "to": "settings.collectionCity", "actions": ["sendEnterCity"]},
+        {"event": "error", "to": "settings.start", "actions": ["sendCommandNotFound"]}
+      ]
+    },
+    "changeLanguage": {
+      "id": "settings.changeLanguage",
+      "validation": {
+        "type": "choice",
+        "allowed": ["8"],
+        "saveAs": "data.selectedLangId",
+        "mapping": {
+          "8": {"event": "ok"}
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {"event": "ok", "to": "settings.start", "actions": ["saveLanguageChange", "sendSettingsMenu"]},
+        {"event": "cancel", "to": "settings.start", "actions": ["sendSettingsMenu"]},
+        {"event": "error", "to": "settings.changeLanguage", "actions": ["sendCommandNotFound"]}
+      ]
+    },
+    "settingsLegalInfo": {
+      "id": "settings.settingsLegalInfo",
+      "validation": {"type": "regex", "pattern": "^.*$", "successEvent": "ok", "errorEvent": "ok"},
+      "transitions": [
+        {"event": "ok", "to": "settings.start", "actions": ["sendSettingsMenu"]}
+      ]
+    },
+    "askDeleteAccount": {
+      "id": "settings.askDeleteAccount",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2"],
+        "mapping": {
+          "1": {"event": "confirm_delete"},
+          "2": {"event": "cancel_delete"}
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {"event": "confirm_delete", "to": "", "actions": ["deleteAccount"]},
+        {"event": "cancel_delete", "to": "settings.start", "actions": ["sendSettingsMenu"]},
+        {"event": "error", "to": "settings.askDeleteAccount", "actions": ["sendCommandNotFound"]}
+      ]
+    },
+    "collectionFullNameAndBirthYear": {
+      "id": "settings.collectionFullNameAndBirthYear",
+      "customValidation": {
+        "format": "FirstName LastName YYYY",
+        "minAge": 18,
+        "saveFields": ["data.fullName", "data.birthYear"]
+      },
+      "transitions": [
+        {"event": "ok", "to": "settings.start", "actions": ["saveFullNameAndBirthYear", "sendSettingsMenu"]},
+        {"event": "error", "to": "settings.collectionFullNameAndBirthYear", "actions": ["sendEnterFullNameAndBirthYearError"]}
+      ]
+    },
+    "collectionPhone": {
+      "id": "settings.collectionPhone",
+      "validation": {
+        "type": "regex",
+        "pattern": "^.+$",
+        "mapping": { "0": { "event": "cancel" } },
+        "successEvent": "ok",
+        "errorEvent": "error",
+        "saveAs": "data.phone"
+      },
+      "transitions": [
+        {"event": "ok", "to": "settings.start", "actions": ["savePhone", "sendSettingsMenu"]},
+        {"event": "cancel", "to": "settings.start", "actions": ["sendSettingsMenu"]},
+        {"event": "error", "to": "settings.collectionPhone", "actions": ["sendEnterPhoneNumber"]}
+      ]
+    },
+    "collectionCity": {
+      "id": "settings.collectionCity",
+      "validation": {
+        "type": "regex",
+        "pattern": "^.+$",
+        "successEvent": "ok",
+        "errorEvent": "error",
+        "saveAs": "data.cityString"
+      },
+      "transitions": [
+        {"event": "ok", "to": "settings.start", "actions": ["saveCity", "sendSettingsMenu"]},
+        {"event": "error", "to": "settings.collectionCity", "actions": ["sendEnterCity"]}
+      ]
+    }
+  }
+}
