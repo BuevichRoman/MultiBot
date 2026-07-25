@@ -1,0 +1,19 @@
+logs
+# Локальные конфиги (шаблоны: config/*.example.json)
+config/app.json
+config/orchestrator.json
+l10n.json
+l10n_en.json
+l10n_fr.json
+l10n_ar.json
+node_modules
+.wwebjs_auth
+.wwebjs_cache
+data/wwebjs_test_adapter_neworch
+.idea
+start.sh
+sessions
+package-lock.json
+dist
+.wwebjs_test_auth
+sess

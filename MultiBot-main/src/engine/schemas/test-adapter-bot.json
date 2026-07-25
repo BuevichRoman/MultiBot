@@ -1,0 +1,33 @@
+{
+  "tenantId": "test-adapter-bot",
+  "initialState": "start",
+  "states": {
+    "start": {
+      "id": "start",
+      "entryActions": ["welcome"],
+      "transitions": [
+        { "event": "message", "to": "asked", "actions": ["askName"] }
+      ]
+    },
+    "asked": {
+      "id": "asked",
+      "transitions": [
+        { "event": "name_provided", "to": "collected", "actions": ["storeName","sayThanks"] }
+      ]
+    },
+    "collected": {
+      "id": "collected",
+      "transitions": [
+        { "event": "message", "to": "done", "actions": ["finalReply"] }
+      ]
+    },
+    "done": { "id": "done" }
+  },
+  "actions": {
+    "welcome": { "type": "sendMessage", "params": { "text": "Welcome to TestBot" } },
+    "askName": { "type": "sendMessage", "params": { "text": "What is your name?" } },
+    "storeName": { "type": "store", "params": { "field": "name" } },
+    "sayThanks": { "type": "sendMessage", "params": { "text": "Thanks!" } },
+    "finalReply": { "type": "sendMessage", "params": { "text": "All done." } }
+  }
+}

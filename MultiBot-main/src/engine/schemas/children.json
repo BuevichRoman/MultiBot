@@ -1,0 +1,192 @@
+{
+  "initialState": "registration.start",
+  "actions": {
+    "sendL10n": {
+      "type": "sendL10n",
+      "description": "Отправка локализованного сообщения"
+    },
+    "validateFullName": {
+      "type": "validation",
+      "rule": "fullName",
+      "description": "Валидация ФИО и года рождения"
+    },
+    "performRegister": {
+      "type": "apiCall",
+      "endpoint": "/register",
+      "description": "Регистрация пользователя"
+    }
+  },
+  "flowSelection": {
+    "strategy": "first_match",
+    "flows": [
+      {
+        "name": "registration",
+        "condition": "!user.registered",
+        "default": true
+      }
+    ]
+  },
+  "flows": {
+    "registration": {
+      "name": "registration",
+      "description": "Регистрация новых пользователей",
+      "states": {
+        "registration.start": {
+          "id": "registration.start",
+          "transitions": [
+            {
+              "event": "language_selected",
+              "to": "registration.collection_language",
+              "actions": ["promptSelectLanguage", "promptLanguagesList"]
+            }
+          ]
+        },
+        "registration.collection_language": {
+          "id": "registration.collection_language",
+          "transitions": [
+            {
+              "event": "message",
+              "to": "registration.children_welcome",
+              "actions": ["sendWelcome"]
+            }
+          ]
+        },
+        "registration.children_welcome": {
+          "id": "registration.children_welcome",
+          "entryActions": [],
+          "transitions": [
+            {
+              "event": "full_name_provided",
+              "to": "registration.collectionFullName",
+              "actions": ["validateFullName"]
+            }
+          ]
+        },
+        "registration.collectionFullName": {
+          "id": "registration.collectionFullName",
+          "entryActions": [],
+          "transitions": [
+            {
+              "event": "full_name_valid",
+              "to": "registration.children_collectionPhone",
+              "actions": ["promptPhone"]
+            },
+            {
+              "event": "full_name_invalid",
+              "to": "registration.collectionFullName",
+              "actions": []
+            }
+          ]
+        },
+        "registration.children_collectionPhone": {
+          "id": "registration.children_collectionPhone",
+          "entryActions": [],
+          "transitions": [
+            {
+              "event": "phone_provided",
+              "to": "registration.children_collectionCity",
+              "actions": ["promptCity"]
+            }
+          ]
+        },
+        "registration.children_collectionCity": {
+          "id": "registration.children_collectionCity",
+          "entryActions": [],
+          "transitions": [
+            {
+              "event": "city_provided",
+              "to": "registration.children_docs_publicOffer",
+              "actions": ["promptPublicOffer"]
+            }
+          ]
+        },
+        "registration.children_docs_publicOffer": {
+          "id": "registration.children_docs_publicOffer",
+          "entryActions": ["promptPublicOffer"],
+          "transitions": [
+            {
+              "event": "doc_accepted",
+              "to": "registration.children_docs_privacyPolicy",
+              "actions": ["promptPrivacyPolicy"]
+            }
+          ]
+        },
+        "registration.children_docs_privacyPolicy": {
+          "id": "registration.children_docs_privacyPolicy",
+          "entryActions": ["promptPrivacyPolicy"],
+          "transitions": [
+            {
+              "event": "doc_accepted",
+              "to": "registration.children_docs_legalInfo",
+              "actions": ["promptLegalInfo"]
+            }
+          ]
+        },
+        "registration.children_docs_legalInfo": {
+          "id": "registration.children_docs_legalInfo",
+          "entryActions": ["promptLegalInfo"],
+          "transitions": [
+            {
+              "event": "doc_accepted",
+              "to": "registration.children_acceptDocs",
+              "actions": ["promptAcceptDocs"]
+            }
+          ]
+        },
+        "registration.children_acceptDocs": {
+          "id": "registration.children_acceptDocs",
+          "entryActions": ["promptAcceptDocs"],
+          "transitions": [
+            {
+              "event": "docs_accepted",
+              "to": "registration.children_registered",
+              "actions": ["performRegister"]
+            }
+          ]
+        },
+        "registration.children_registered": {
+          "id": "registration.children_registered",
+          "transitions": []
+        }
+      },
+      "actions": {
+        "promptSelectLanguage": {
+          "type": "sendL10n",
+          "params": { "key": "wab_selectLanguage", "lang": "2" }
+        },
+        "promptLanguagesList": {
+          "type": "sendL10n",
+          "params": { "key": "wab_languagesList", "lang": "1" }
+        },
+        "sendWelcome": {
+          "type": "sendL10n",
+          "params": { "key": "wab_welcome", "lang": "1" }
+        },
+        "promptPhone": {
+          "type": "sendL10n",
+          "params": { "key": "wab_enterPhoneNumber", "lang": "1" }
+        },
+        "promptCity": {
+          "type": "sendL10n",
+          "params": { "key": "wab_enterCity", "lang": "1" }
+        },
+        "promptPublicOffer": {
+          "type": "sendL10n",
+          "params": { "key": "wab_publicOfferText", "lang": "1" }
+        },
+        "promptPrivacyPolicy": {
+          "type": "sendL10n",
+          "params": { "key": "wab_privacyPolicyText", "lang": "1" }
+        },
+        "promptLegalInfo": {
+          "type": "sendL10n",
+          "params": { "key": "wab_legalInformationText", "lang": "1" }
+        },
+        "promptAcceptDocs": {
+          "type": "sendL10n",
+          "params": { "key": "wab_pleaseAcceptDocs", "lang": "1" }
+        }
+      }
+    }
+  }
+}

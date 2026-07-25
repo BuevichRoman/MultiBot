@@ -1,0 +1,18 @@
+{
+  "initialState": "registration.start",
+  "actions": {},
+  "flowSelection": {
+    "strategy": "first_match",
+    "flows": [
+      {
+        "name": "main",
+        "condition": "isRegistered && !isDeleted"
+      },
+      {
+        "name": "registration",
+        "condition": "!isRegistered || isDeleted",
+        "default": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "tenantId": "children",
+  "initialState": "start",
+  "states": {
+    "start": {
+      "id": "start",
+      "transitions": [
+        { "event": "language_selected", "to": "collection_language",
+          "actions": ["promptSelectLanguage","promptLanguagesList"]
+        }
+      ]
+    },
+    "collection_language": {
+      "id": "collection_language",
+      "transitions": [
+        { "event": "message", "to": "children_welcome",
+          "actions": ["sendWelcome"]
+        }
+      ]
+    },
+    "children_welcome": {
+      "id": "children_welcome",
+      "entryActions": [],
+      "transitions": [
+        { "event": "full_name_provided", "to": "collectionFullName", "actions": ["validateFullName"] }
+      ]
+    },
+    "collectionFullName": {
+      "id": "collectionFullName",
+      "entryActions": [],
+      "transitions": [
+        { "event": "full_name_valid", "to": "children_collectionPhone", "actions": ["promptPhone"] },
+        { "event": "full_name_invalid", "to": "collectionFullName", "actions": ["promptFullNameError"] }
+      ]
+    },
+    "children_collectionPhone": {
+      "id": "children_collectionPhone",
+      "entryActions": [],
+      "transitions": [
+        { "event": "phone_provided", "to": "children_collectionCity", "actions": ["promptCity"] }
+      ]
+    },
+    "children_collectionCity": {
+      "id": "children_collectionCity",
+      "entryActions": [],
+      "transitions": [
+        { "event": "city_provided", "to": "children_docs_publicOffer", "actions": ["promptPublicOffer"] }
+      ]
+    }
+    ,
+    "children_docs_publicOffer": {
+      "id": "children_docs_publicOffer",
+      "entryActions": ["promptPublicOffer"],
+      "transitions": [
+        { "event": "doc_accepted", "to": "children_docs_privacyPolicy", "actions": ["promptPrivacyPolicy"] }
+      ]
+    },
+    "children_docs_privacyPolicy": {
+      "id": "children_docs_privacyPolicy",
+      "entryActions": ["promptPrivacyPolicy"],
+      "transitions": [
+        { "event": "doc_accepted", "to": "children_docs_legalInfo", "actions": ["promptLegalInfo"] }
+      ]
+    },
+    "children_docs_legalInfo": {
+      "id": "children_docs_legalInfo",
+      "entryActions": ["promptLegalInfo"],
+      "transitions": [
+        { "event": "doc_accepted", "to": "children_acceptDocs", "actions": ["promptAcceptDocs"] }
+      ]
+    },
+    "children_acceptDocs": {
+      "id": "children_acceptDocs",
+      "entryActions": ["promptAcceptDocs"],
+      "transitions": [
+        { "event": "docs_accepted", "to": "children_registered", "actions": ["performRegister", "sendRegistrationComplete"] }
+      ]
+    },
+    "children_registered": {
+      "id": "children_registered",
+      "entryActions": [],
+      "transitions": [
+        {"event": "language_selected", "to": "start", "actions": ["sendWelcome"]}
+      ]
+    }
+  },
+  "actions": {
+    "promptSelectLanguage": { "type": "sendL10n", "params": { "key": "wab_selectLanguage", "lang": "2" } },
+    "promptLanguagesList": { "type": "sendL10n", "params": { "key": "wab_languagesList", "lang": "1" } },
+    "sendWelcome": { "type": "sendL10n", "params": { "key": "wab_welcome", "lang": "1"  } },
+    "promptFullName": { "type": "sendL10n", "params": { "key": "wab_enterFirstNameLastNameAndBirthYear", "lang": "1"  } },
+    "promptFullNameError": { "type": "sendL10n", "params": { "key": "enterFirstNameLastNameAndBirthYearError", "lang": "1"  } },
+    "validateFullName": { "type": "validateFullName" },
+    "promptPhone": { "type": "sendL10n", "params": { "key": "wab_enterPhoneNumber", "lang": "1"} },
+    "promptCity": { "type": "sendL10n", "params": { "key": "wab_enterCity", "lang": "1" } }
+    ,
+    "promptPublicOffer": { "type": "sendL10n", "params": { "key": "wab_publicOfferText", "lang": "1" } },
+    "promptPrivacyPolicy": { "type": "sendL10n", "params": { "key": "wab_privacyPolicyText", "lang": "1" } },
+    "promptLegalInfo": { "type": "sendL10n", "params": { "key": "wab_legalInformationText", "lang": "1" } },
+    "promptAcceptDocs": { "type": "sendL10n", "params": { "key": "wab_pleaseAcceptDocs", "lang": "1" } },
+    "performRegister": { "type": "performRegister" },
+    "sendRegistrationComplete": { "type": "sendL10n", "params": { "key": "wab_registrationCompleted", "lang": "1" } }
+  }
+}

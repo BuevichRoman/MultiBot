@@ -1,0 +1,585 @@
+{
+  "name": "main",
+  "description": "Основное флоу",
+  "actions": {
+    "sendCommandNotFound": {
+      "type": "sendL10n",
+      "params": {"key": "wab_commandNotFound", "lang": { "var": "user.lang" }}
+    },
+    "sendDefaultMenu": {
+      "type": "sendL10n",
+      "params": {"key": "wab_defaultPrompt", "lang": { "var": "user.lang" }}
+    },
+    "sendFrom": {
+      "type": "sendL10n",
+      "params": {"key": "wab_enterStartPoint", "lang": { "var": "user.lang" }}
+    },
+    "sendEnterHoursCount": {
+      "type": "sendL10n",
+      "params": {"key": "wab_enterHoursCount",
+        "lang": { "var": "user.lang" }
+      }
+    },
+    "sendEnterChildrenCount": {
+      "type": "sendL10n",
+      "params": {"key": "wab_enterChildrenCount",
+        "lang": { "var": "user.lang" }
+      }
+    },
+    "sendChildrenInfoShortedVariant": {
+      "type": "sendL10n",
+      "params": {"key": "wab_childrenInfoShortedVariant", "lang": { "var": "user.lang" }}
+    },
+    "sendNeedAdditionalOptionsQuestion": {
+      "type": "sendL10n",
+      "params": {"key": "wab_needAdditionalOptionsQuestion", "lang": { "var": "user.lang" }}
+    },
+    "sendSelectAdditionalOptions": {
+      "type": "sendSelectAdditionalOptions"
+    },
+    "sendCollectionWhen": {
+      "type": "sendL10n",
+      "params": {"key": "wab_collectionWhen", "lang": { "var": "user.lang" }}
+    },
+    "sendFromHelp": {
+      "type": "sendL10n",
+      "params": {"key": "wab_helpStartPoint", "lang": { "var": "user.lang" }}
+    },
+    "sendOrderCanceled": {
+      "type": "sendL10n",
+      "params": {"key": "wab_orderCanceled", "lang": { "var": "user.lang" }}
+    },
+    "sendCollectionAdditionalOptionsError": {
+      "type": "sendL10n",
+      "params": {"key": "wab_collectionAdditionalOptionsError", "lang": { "var": "user.lang" }}
+    },
+    "sendGetTimestampError": {
+      "type": "sendL10n",
+      "params": {"key": "wab_getTimestampError", "lang": { "var": "user.lang" }}
+    },
+    "sendCollectionOrderConfirm": {
+      "type": "sendOrderConfirmation",
+      "params": {"lang": { "var": "user.lang" }}
+    },
+    "sendConfirmPrompt": {
+      "type": "sendL10n",
+      "params": {"key": "wab_confirmPrompt", "lang": { "var": "user.lang" }}
+    },
+    "sendSearchingForDrivers": {
+      "type": "sendL10n",
+      "params": {"key": "wab_searchingForDrivers", "lang": { "var": "user.lang" }}
+    },
+    "sendNoDriversFoundOrderCancelled": {
+      "type": "sendL10n",
+      "params": {"key": "wab_noDriversFoundOrderCancelled", "lang": { "var": "user.lang" }}
+    },
+    "mergeWaitingForDrivers": {
+      "type": "data",
+      "operation": "merge",
+      "params": { "order.input.waitingForDrivers": true }
+    },
+    "startDriverSearch": {
+      "type": "startDriverSearch"
+    },
+    "createOrder": {
+      "type": "createOrder"
+    },
+    "sendDriverSelectionError": {
+      "type": "sendDriverSelectionError"
+    },
+    "clearOrderData": {
+      "type": "clearOrderData"
+    },
+    "initDocsFlow": {
+      "type": "initDocsFlow"
+    },
+    "sendDocsPrivacyPolicy": {
+      "type": "sendDocsPrivacyPolicy"
+    },
+    "sendDocsLegalInfo": {
+      "type": "sendDocsLegalInfo"
+    },
+    "saveDocsToApi": {
+      "type": "saveDocsToApi"
+    },
+    "sendDocsDeclined": {
+      "type": "sendL10n",
+      "params": {"key": "wab_docsDeclinedCanNotUseOrder", "lang": { "var": "user.lang" }}
+    },
+    "sendHoursNumberMystBeNumber": {
+      "type": "sendL10n",
+      "params": {"key": "wab_hoursNumberMystBeNumber","lang": { "var": "user.lang" }}
+    },
+    "sendChildrenCountMustBeNumber": {
+      "type": "sendL10n",
+      "params": {"key": "wab_childrenCountMustBeNumber","lang": { "var": "user.lang" }}
+    },
+    "sendOrderCreatingCancel": {
+      "type": "sendL10n",
+      "params": {"key": "wab_orderCreatingCancel", "lang": { "var": "user.lang" }}
+    },
+    "sendHelp": {
+      "type": "sendL10n",
+      "params": {"key": "wab_help", "lang": { "var": "user.lang" }}
+    }
+  },
+  "states": {
+    "start": {
+      "id": "main.start",
+      "validation": {
+        "type": "choice",
+        "allowed": ["0","1","9", "/start"],
+        "mapping": {
+          "0": {"event": "order_creation"},
+          "1": {"event": "settings"},
+          "9": {"event": "help"},
+          "/start": {"event": "start"}
+        },
+        "errorAction": "sendCommandNotFound",
+        "errorEvent": "unknown_default_command"
+      },
+      "transitions": [
+        {
+          "event": "start",
+          "to": "main.start",
+          "actions": ["sendDefaultMenu"]
+        },
+        {
+          "event": "help",
+          "to": "main.start",
+          "actions": ["sendHelp"]
+        },
+        {
+          "event": "order_creation",
+          "to": "main.from",
+          "actions": ["clearOrderData", "sendFrom"]
+        },
+        {
+          "event": "docs_needed",
+          "to": "main.docsPublicOffer",
+          "actions": ["initDocsFlow"]
+        },
+        {
+          "event": "settings",
+          "to": "settings.start",
+          "actions": ["sendSettingsMenu"]
+        },
+        {
+          "event": "unknown_default_command",
+          "to": "main.start",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "from": {
+      "id": "main.from",
+      "validation": {
+        "type": "mapping",
+        "mapping": { "0":{ "event": "exit" }, "9": { "event": "help" } },
+        "errorEvent": "error"
+      },
+      "location": {
+        "accept": true,
+        "save": {
+          "latitude": {
+            "type": "order",
+            "name": "latitude"
+          },
+          "longitude": {
+            "type": "order",
+            "name": "longitude"
+          }
+        },
+        "onSuccess": { "event":  "ok" }
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "main.hoursCount",
+          "actions": ["sendEnterHoursCount"]
+        },
+        {
+          "event": "help",
+          "to": "main.from",
+          "actions": ["sendFromHelp"]
+        },
+        {
+          "event": "exit",
+          "to": "main.start",
+          "actions": ["sendOrderCreatingCancel","sendDefaultMenu"]
+        },
+        {
+          "event": "error",
+          "to": "main.from",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "hoursCount": {
+      "id": "main.hoursCount",
+      "validation": {
+        "type": "regex",
+        "pattern": "^\\d+$",
+        "errorEvent": "error",
+        "successEvent": "ok",
+        "mapping": {
+          "0": {
+            "event": "exit"
+          }
+        }
+      },
+      "actions": {
+        "saveHoursCount": {
+          "type": "save",
+          "params": {
+            "var": {
+              "type": "order",
+              "name": "hoursCount"
+            }
+          }
+        }
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "main.childrenCount",
+          "actions": ["saveHoursCount","sendEnterChildrenCount"]
+        },
+        {
+          "event": "error",
+          "to": "main.hoursCount",
+          "actions": ["sendHoursNumberMystBeNumber"]
+        },
+        {
+          "event": "exit",
+          "to": "main.start",
+          "actions": ["sendOrderCanceled","sendDefaultMenu"]
+        }
+      ]
+    },
+    "childrenCount": {
+      "id": "main.childrenCount",
+      "validation": {
+        "type": "regex",
+        "pattern": "^\\d+$",
+        "errorEvent": "error",
+        "successEvent": "ok",
+        "mapping": {
+          "0": {
+            "event": "exit"
+          }
+        }
+      },
+      "actions": {
+        "saveChildrenCount": {
+          "type": "save",
+          "params": {
+            "var": {
+              "type": "order",
+              "name": "childrenCount"
+            }
+          }
+        }
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "main.childrenInfo",
+          "actions": ["saveChildrenCount","sendChildrenInfoShortedVariant"]
+        },
+        {
+          "event": "error",
+          "to": "main.childrenCount",
+          "actions": ["sendChildrenCountMustBeNumber"]
+        },
+        {
+          "event": "exit",
+          "to": "main.start",
+          "actions": ["sendOrderCanceled","sendDefaultMenu"]
+        }
+      ]
+    },
+    "childrenInfo": {
+      "id": "main.childrenInfo",
+      "validation": {
+        "type": "regex",
+        "pattern": "^.*$",
+        "successEvent": "ok",
+        "errorEvent": "error",
+        "mapping": {
+          "0": {
+            "event": "exit"
+          }
+        }
+      },
+      "actions": {
+        "saveChildrenInfo": {
+          "type": "save",
+          "params": {
+            "var": {
+              "type": "order",
+              "name": "childrenInfo"
+            }
+          }
+        }
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "main.showOptions",
+          "actions": ["saveChildrenInfo","sendNeedAdditionalOptionsQuestion"]
+        },
+        {
+          "event": "exit",
+          "to": "main.start",
+          "actions": ["sendOrderCanceled","sendDefaultMenu"]
+        },
+        {
+          "event": "error",
+          "to": "main.childrenCount",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "showOptions": {
+      "id": "main.showOptions",
+      "validation": {
+        "mapping": {
+          "0": {
+            "event": "exit"
+          },
+          "1": {
+            "event": "yes"
+          },
+          "2": {
+            "event": "no"
+          }
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {
+          "event": "yes",
+          "to": "main.options",
+          "actions": ["sendSelectAdditionalOptions"]
+        },
+        {
+          "event": "no",
+          "to": "main.when",
+          "actions": ["sendCollectionWhen"]
+        },
+        {
+          "event": "exit",
+          "to": "main.start",
+          "actions": ["sendOrderCanceled","sendDefaultMenu"]
+        },
+        {
+          "event": "error",
+          "to": "main.childrenCount",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "options": {
+      "id": "main.options",
+      "validation": {
+        "type": "mapping",
+        "mapping": {
+          "0": { "event": "skip", "data": { "order.input.additionalOptions": [] } }
+        },
+        "additionalOptionsAllowed": ["1", "2", "4", "6", "7", "8"],
+        "additionalOptionsTokenMap": {
+          "1": 1,
+          "2": 2,
+          "4": 4,
+          "6": 6,
+          "7": 7,
+          "8": 8
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "main.when",
+          "actions": ["sendCollectionWhen"]
+        },
+        {
+          "event": "skip",
+          "to": "main.when",
+          "actions": ["sendCollectionWhen"]
+        },
+        {
+          "event": "error",
+          "to": "main.options",
+          "actions": ["sendCollectionAdditionalOptionsError"]
+        }
+      ]
+    },
+    "when": {
+      "id": "main.when",
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "main.confirm",
+          "actions": ["sendCollectionOrderConfirm"]
+        },
+        {
+          "event": "error",
+          "to": "main.when",
+          "actions": ["sendGetTimestampError"]
+        }
+      ]
+    },
+    "confirm": {
+      "id": "main.confirm",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2"],
+        "mapping": {
+          "0": {"event": "exit"},
+          "1": {"event": "confirm"}
+        },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {
+          "event": "confirm",
+          "to": "main.driverSearch",
+          "actions": ["mergeWaitingForDrivers", "startDriverSearch"]
+        },
+        {
+          "event": "exit",
+          "to": "main.start",
+          "actions": ["sendOrderCanceled", "sendDefaultMenu"]
+        },
+        {
+          "event": "error",
+          "to": "main.confirm",
+          "actions": ["sendCommandNotFound"]
+        }
+      ]
+    },
+    "driverSearch": {
+      "id": "main.driverSearch",
+      "transitions": [
+        {
+          "event": "drivers_found",
+          "to": "main.driverList",
+          "actions": []
+        },
+        {
+          "event": "no_drivers",
+          "to": "main.start",
+          "actions": ["clearOrderData", "sendDefaultMenu"]
+        }
+      ]
+    },
+    "driverList": {
+      "id": "main.driverList",
+      "validation": {
+        "type": "mapping",
+        "mapping": { "0": { "event": "exit" } },
+        "errorEvent": "error"
+      },
+      "transitions": [
+        {
+          "event": "ok",
+          "to": "order.start",
+          "actions": ["createOrder"]
+        },
+        {
+          "event": "exit",
+          "to": "main.start",
+          "actions": ["sendOrderCanceled", "sendDefaultMenu"]
+        },
+        {
+          "event": "error",
+          "to": "main.driverList",
+          "actions": ["sendDriverSelectionError"]
+        }
+      ]
+    },
+    "default": {
+      "id": "main.default",
+      "validation": {
+        "type": "choice",
+        "allowed": ["0", "1", "9","/start"],
+        "mapping": {
+          "0": {"event": "order_creation"},
+          "1": {"event": "settings"},
+          "9": {"event": "help"},
+          "/start": {"event": "start"}
+        },
+        "errorEvent": "unknown_default_command"
+      },
+      "transitions": [
+        {
+          "event": "start",
+          "to": "main.default",
+          "actions": ["sendDefaultMenu"]
+        },
+        {
+          "event": "help",
+          "to": "main.default",
+          "actions": ["sendHelp"]
+        },
+        {"event": "order_creation", "to": "main.from", "actions": ["clearOrderData", "sendFrom"]},
+        {"event": "settings", "to": "settings.start", "actions": ["sendSettingsMenu"]},
+        {"event": "docs_needed", "to": "main.docsPublicOffer", "actions": ["initDocsFlow"]},
+        {"event": "unknown_default_command", "to": "main.default", "actions": ["sendCommandNotFound"]}
+      ]
+    },
+    "docsPublicOffer": {
+      "id": "main.docsPublicOffer",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2"],
+        "mapping": {
+          "1": {"event": "docs_accept"},
+          "2": {"event": "docs_reject"}
+        },
+        "errorEvent": "unknown_default_command"
+      },
+      "transitions": [
+        {"event": "docs_accept", "to": "main.docsPrivacyPolicy", "actions": ["sendDocsPrivacyPolicy"]},
+        {"event": "docs_reject", "to": "main.start", "actions": ["sendDocsDeclined", "sendDefaultMenu"]},
+        {"event": "unknown_default_command", "to": "main.docsPublicOffer", "actions": ["sendCommandNotFound"]}
+      ]
+    },
+    "docsPrivacyPolicy": {
+      "id": "main.docsPrivacyPolicy",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2"],
+        "mapping": {
+          "1": {"event": "docs_accept"},
+          "2": {"event": "docs_reject"}
+        },
+        "errorEvent": "unknown_default_command"
+      },
+      "transitions": [
+        {"event": "docs_accept", "to": "main.docsLegalInfo", "actions": ["sendDocsLegalInfo"]},
+        {"event": "docs_reject", "to": "main.start", "actions": ["sendDocsDeclined", "sendDefaultMenu"]},
+        {"event": "unknown_default_command", "to": "main.docsPrivacyPolicy", "actions": ["sendCommandNotFound"]}
+      ]
+    },
+    "docsLegalInfo": {
+      "id": "main.docsLegalInfo",
+      "validation": {
+        "type": "choice",
+        "allowed": ["1", "2"],
+        "mapping": {
+          "1": {"event": "docs_accept"},
+          "2": {"event": "docs_reject"}
+        },
+        "errorEvent": "unknown_default_command"
+      },
+      "transitions": [
+        {"event": "docs_accept", "to": "main.from", "actions": ["clearOrderData", "saveDocsToApi", "sendFrom"]},
+        {"event": "docs_reject", "to": "main.start", "actions": ["sendDocsDeclined", "sendDefaultMenu"]},
+        {"event": "unknown_default_command", "to": "main.docsLegalInfo", "actions": ["sendCommandNotFound"]}
+      ]
+    }
+  }
+}
