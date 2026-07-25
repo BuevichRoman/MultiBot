@@ -17,3 +17,4 @@ package-lock.json
 dist
 .wwebjs_test_auth
 sess
+taxi-nanny-ui/
