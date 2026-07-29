@@ -110,6 +110,7 @@ export async function handleCreateOrder(ctx: ActionContext): Promise<void> {
         childrenCount: data.childrenCount,
         additionalOptions: data.additionalOptions ?? [],
         preferredDriversList: data.preferredDriversList ?? [],
+        plannedBreaks: data.plannedBreaks ?? [],
     };
 
     await ctx.mergeData({ orderDraft });
@@ -338,4 +339,118 @@ export async function handleCancelOrderWithReason(ctx: ActionContext): Promise<v
     if (orderManager?.unregisterOrder) {
         orderManager.unregisterOrder(String(orderId));
     }
+}
+
+// --- перерывы (ТЗ-001) ------------------------------------------------------
+
+/**
+ * Запасные тексты перерывов.
+ *
+ * Тексты бота приходят из справочника lang_vls серверного конфига, и при
+ * отсутствии ключа getLocalizedText возвращает сам ключ. Ключей перерывов
+ * там пока нет, поэтому до их добавления показываем эти значения.
+ */
+const BREAK_TEXTS: Record<string, string> = {
+    wab_breakstarted: 'Няня начала перерыв в %time%.',
+    wab_breakended: 'Няня завершила перерыв в %time%.',
+    wab_breaksummary: 'Перерывов: %count%, суммарно %breaks%. Рабочее время: %work%.',
+    wab_plannedbreaksprompt:
+        'Планируются ли перерывы? Укажите их в формате 11:00-12:00, ' +
+        'несколько — через запятую. Отправьте 0, если перерывов не планируется.',
+    wab_plannedbreakserror:
+        'Не удалось разобрать интервалы. Формат: 11:00-12:00, несколько через запятую. ' +
+        'Отправьте 0, если перерывов не планируется.',
+};
+
+/** Как getLocalizedText, но с запасным текстом вместо возврата самого ключа */
+async function breakText(ctx: ActionContext, key: string, lang?: string): Promise<string> {
+    const result = await ctx.getLocalizedText(key, lang);
+    return result === key ? (BREAK_TEXTS[key] ?? key) : result;
+}
+
+/** Время в формате ЧЧ:ММ по метке сервера */
+function formatBreakTime(iso?: string | null): string {
+    if (!iso) return '';
+    const value = new Date(iso);
+    if (Number.isNaN(value.getTime())) return '';
+    const hours = String(value.getHours()).padStart(2, '0');
+    const minutes = String(value.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+}
+
+function formatBreakDuration(seconds?: number): string {
+    const total = Math.max(0, Math.floor(seconds ?? 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    if (hours > 0) return `${hours} ч ${minutes} мин`;
+    if (minutes > 0) return `${minutes} мин`;
+    return `${total} с`;
+}
+
+/**
+ * Читает актуальное состояние заказа. Время берём с сервера, а не из
+ * события — так метки остаются серверными даже если событие задержалось
+ */
+async function loadExecution(ctx: ActionContext) {
+    const container = await ctx.getData();
+    const orderId = container?.order?.id ?? container?.data?.order?.id;
+    if (!orderId) return null;
+
+    try {
+        const state = await ctx.apiManager?.getOrderState?.(String(orderId));
+        return {
+            lang: String(container?.user?.lang ?? '1'),
+            execution: state?.b_execution ?? null,
+        };
+    } catch (e) {
+        orderActLog.error('[breaks] getOrderState failed', { orderId, error: e });
+        return null;
+    }
+}
+
+/** Уведомление о начале перерыва (ТЗ п. 10) */
+export async function handleSendBreakStarted(ctx: ActionContext): Promise<void> {
+    const loaded = await loadExecution(ctx);
+    if (!loaded) return;
+
+    const active = loaded.execution?.actual?.breaks?.find((item: any) => item.ended == null);
+    const template = await breakText(ctx, 'wab_breakstarted', loaded.lang);
+    await ctx.sendMessage(template.replace(/%time%/g, formatBreakTime(active?.started)));
+}
+
+/** Уведомление об окончании перерыва и текущие итоги (ТЗ п. 9, 10) */
+export async function handleSendBreakEnded(ctx: ActionContext): Promise<void> {
+    const loaded = await loadExecution(ctx);
+    if (!loaded) return;
+
+    const actual = loaded.execution?.actual;
+    const breaks = actual?.breaks ?? [];
+    const last = breaks[breaks.length - 1];
+
+    const template = await breakText(ctx, 'wab_breakended', loaded.lang);
+    await ctx.sendMessage(template.replace(/%time%/g, formatBreakTime(last?.ended)));
+
+    // Счётчик показывает только видимые перерывы, суммы — все (ТЗ п. 20)
+    const visible = breaks.filter((item: any) => item.display && item.ended != null).length;
+    const summary = await breakText(ctx, 'wab_breaksummary', loaded.lang);
+    await ctx.sendMessage(
+        summary
+            .replace(/%count%/g, String(visible))
+            .replace(/%breaks%/g, formatBreakDuration(actual?.break_seconds))
+            .replace(/%work%/g, formatBreakDuration(actual?.work_seconds)),
+    );
+}
+
+/** Приглашение указать плановые перерывы при создании заказа (ТЗ п. 5) */
+export async function handleSendPlannedBreaksPrompt(ctx: ActionContext): Promise<void> {
+    const container = await ctx.getData();
+    const lang = String(container?.user?.lang ?? '1');
+    await ctx.sendMessage(await breakText(ctx, 'wab_plannedbreaksprompt', lang));
+}
+
+/** Сообщение о неразобранном вводе интервалов */
+export async function handleSendPlannedBreaksError(ctx: ActionContext): Promise<void> {
+    const container = await ctx.getData();
+    const lang = String(container?.user?.lang ?? '1');
+    await ctx.sendMessage(await breakText(ctx, 'wab_plannedbreakserror', lang));
 }
