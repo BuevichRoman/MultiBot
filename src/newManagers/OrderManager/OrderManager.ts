@@ -226,6 +226,8 @@ export class OrderManager {
           await this.emit(entry, event);
         }
 
+        await this.emitBreakChange(entry, data);
+
         if (TERMINAL_EVENTS.has(event)) {
           this.activeOrders.delete(orderId);
         }
@@ -237,14 +239,57 @@ export class OrderManager {
     }
   }
 
-  private async emit(entry: OrderWatchEntry, event: OrderStatusEvent): Promise<void> {
+  /**
+   * События начала и окончания перерыва (ТЗ п. 10).
+   *
+   * Ведутся отдельно от основной машины состояний: во время перерыва заказ
+   * остаётся выполняющимся, поэтому deriveEvent всё это время возвращает
+   * order_status_driver_started и по нему перерыв не отследить.
+   */
+  private async emitBreakChange(entry: OrderWatchEntry, data: RawOrderData): Promise<void> {
+    const mode = data.b_execution?.mode ?? null;
+    const previous = entry.lastExecutionMode;
+
+    if (mode === previous) return;
+    entry.lastExecutionMode = mode;
+
+    // Первый опрос: режим ещё не наблюдался, уведомлять не о чем
+    if (previous === undefined) return;
+
+    if (mode === 'break') {
+      const active = data.b_execution?.actual?.breaks?.find((item) => item.ended == null);
+      await this.emit(entry, ORDER_STATUS_EVENTS.BREAK_STARTED, {
+        breakStartedAt: active?.started,
+      });
+      return;
+    }
+
+    // Об окончании перерыва сообщаем, только если заказ продолжается.
+    // При завершении заказа во время перерыва сервер закрывает интервал сам
+    // (ТЗ п. 17), и заказчик получает итоговое уведомление о завершении —
+    // отдельное «перерыв окончен» после него было бы лишним
+    if (previous === 'break' && mode === 'work') {
+      const breaks = data.b_execution?.actual?.breaks ?? [];
+      const last = breaks[breaks.length - 1];
+      await this.emit(entry, ORDER_STATUS_EVENTS.BREAK_ENDED, {
+        breakEndedAt: last?.ended ?? undefined,
+        breakSeconds: data.b_execution?.actual?.break_seconds,
+      });
+    }
+  }
+
+  private async emit(
+    entry: OrderWatchEntry,
+    event: OrderStatusEvent,
+    extra?: Record<string, unknown>,
+  ): Promise<void> {
     const payload: SystemEventPayload = {
       tenantId: this.tenantId,
       botId: entry.botId,
       chatId: entry.chatId,
       userId: entry.userId,
       event,
-      payload: { orderId: entry.orderId },
+      payload: { orderId: entry.orderId, ...extra },
     };
     await this.config.onSystemEvent(payload);
   }
