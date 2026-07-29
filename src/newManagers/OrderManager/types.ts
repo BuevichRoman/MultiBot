@@ -13,14 +13,54 @@ export const ORDER_STATUS_EVENTS = {
   CANCELED: 'order_status_canceled',
   COMPLETED: 'order_status_completed',
   OUT_OF_TIME: 'order_status_out_of_time',
+  BREAK_STARTED: 'order_status_break_started',
+  BREAK_ENDED: 'order_status_break_ended',
 } as const;
 
 export type OrderStatusEvent = (typeof ORDER_STATUS_EVENTS)[keyof typeof ORDER_STATUS_EVENTS];
+
+/** Перерыв в фактических данных заказа */
+export interface OrderBreak {
+  id: string;
+  started: string;
+  /** null у активного перерыва */
+  ended: string | null;
+  /** Показывать ли перерыв в списках: сервер скрывает слишком короткие */
+  display: boolean;
+}
+
+/**
+ * Показатели выполнения заказа: план, факт и текущий режим.
+ * Все величины считает сервер, бот их только отображает
+ */
+export interface OrderExecution {
+  schema_version?: number;
+  /** null до начала работы и после завершения заказа */
+  mode: 'work' | 'break' | null;
+  estimate?: {
+    total_seconds: number;
+    work_seconds: number;
+    break_seconds: number;
+  } | null;
+  actual?: {
+    started?: string | null;
+    ended?: string | null;
+    breaks?: OrderBreak[];
+    total_seconds: number;
+    work_seconds: number;
+    break_seconds: number;
+    billable_work_seconds: number;
+  };
+}
 
 /** Сырые данные заказа с API (формат drive/get) */
 export interface RawOrderData {
   b_state: number;
   b_start_datetime?: string;
+  /** Перерывы и время по плану и факту. Нет у заказов до включения функционала */
+  b_execution?: OrderExecution;
+  /** Время сервера на момент ответа */
+  server_time?: string;
   b_max_waiting_list?: Record<string, { additional?: string; created?: string } | Record<string, unknown>>;
   drivers?: Array<{
     u_id?: string;
@@ -51,6 +91,12 @@ export interface OrderWatchEntry {
   pollIntervalMs: number;
   /** Последний отправленный в движок статус (чтобы не дублировать) */
   lastEmittedEvent?: OrderStatusEvent;
+  /**
+   * Последний увиденный режим выполнения. Ведётся отдельно от
+   * lastEmittedEvent: перерыв не меняет статус заказа, поэтому основная
+   * машина состояний всё время остаётся в order_status_driver_started
+   */
+  lastExecutionMode?: 'work' | 'break' | null;
   /** Доп. данные (для расширений) */
   meta?: Record<string, unknown>;
 }
