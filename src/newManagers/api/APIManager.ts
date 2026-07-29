@@ -545,6 +545,8 @@ class APIManager {
                 b_start_datetime: booking.b_start_datetime,
                 b_max_waiting_list: booking.b_max_waiting_list,
                 drivers: booking.drivers,
+                b_execution: booking.b_execution,
+                server_time: response.data?.data?.server_time ?? booking.server_time,
             };
         } catch (e: any) {
             this.logger.warn(`${this.tag} [getOrderState] error`, { orderId, error: e?.message });
