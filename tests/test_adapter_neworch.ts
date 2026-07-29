@@ -555,6 +555,21 @@ async function run_tests_main(orchestrator:Orchestrator,
         });
         await waitForMessages(beforeCount + 1);
 
+        // ТЗ-001 п. 5: между вводом времени и подтверждением появился шаг
+        // плановых перерывов. Здесь его пропускаем — отдельно он проверяется
+        // в tests/test_planned_breaks.js
+        assert.ok(
+            sentEvents[beforeCount]?.finalText,
+            `❌ ${stepName}: ожидалась подсказка о плановых перерывах`
+        );
+        const skipCount = sentEvents.length;
+        logger.debug('📤 Sending: "0" (пропуск плановых перерывов)');
+        adapter.receiveMessage({ ...msg, id: `${msg.id}-breaks`, text: '0', location: undefined })
+            .catch((e: string) => {
+                if (adapter.handlers?.error) adapter.handlers.error(e);
+            });
+        await waitForMessages(skipCount + 1);
+
         let isTestMode = false;
         try {
             const uid = String(msg.from?.id ?? msg.chatId ?? '');
@@ -599,9 +614,9 @@ async function run_tests_main(orchestrator:Orchestrator,
             isTestMode
         );
         assert.strictEqual(
-            sentEvents[beforeCount]?.finalText,
+            sentEvents[skipCount]?.finalText,
             expected,
-            `❌ ${stepName}: expected order confirm, got "${sentEvents[beforeCount]?.finalText}"`
+            `❌ ${stepName}: expected order confirm, got "${sentEvents[skipCount]?.finalText}"`
         );
         logger.info(`✅ ${stepName} PASSED`);
     }

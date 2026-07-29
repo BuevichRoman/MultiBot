@@ -4,7 +4,7 @@ import { setValueByPath } from './types';
 import { ActionExecutor } from './ActionExecutor';
 import { TelegramBotPollingAdaptor, WhatsappWebPollingAdaptor } from '../../../transport';
 import TestAdapter from '../../../transport/TestAdapter/TestAdapter';
-import { parseDriverSelection, parseWhen, parseFromInput } from '../../children/parsers';
+import { parseDriverSelection, parseWhen, parseFromInput, parsePlannedBreaks } from '../../children/parsers';
 import { fsmPathFromSaveType } from './fsmStorage';
 import { checkDocsNeedUpdate } from '../../children/docs/docsHelpers';
 import { getTaggedLogger } from '../../../addons/logger';
@@ -375,6 +375,18 @@ export class MainHandler extends BaseHandler {
             }
             const dataContainer = await this.fsm.getData(this.tenantId, userIdStr, botId);
             setValueByPath(dataContainer, 'order.input.when', parsed);
+            await this.fsm.mergeData(this.tenantId, userIdStr, dataContainer, botId);
+            return { event: 'ok' };
+        }
+
+        // main.plannedBreaks: "0" → без перерывов, иначе разбираем интервалы (ТЗ-001 п. 5)
+        if (state === 'main.plannedBreaks') {
+            const parsed = trimmedText === '0' ? [] : parsePlannedBreaks(trimmedText);
+            if (parsed === undefined) {
+                return { event: 'error' };
+            }
+            const dataContainer = await this.fsm.getData(this.tenantId, userIdStr, botId);
+            setValueByPath(dataContainer, 'order.input.plannedBreaks', parsed);
             await this.fsm.mergeData(this.tenantId, userIdStr, dataContainer, botId);
             return { event: 'ok' };
         }

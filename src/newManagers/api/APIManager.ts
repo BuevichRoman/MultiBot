@@ -772,6 +772,8 @@ class APIManager {
             childrenCount?: number;
             additionalOptions?: number[];
             preferredDriversList?: string[];
+            /** Плановые перерывы парами `ЧЧ:ММ` (ТЗ-001 п. 5) */
+            plannedBreaks?: Array<{ started: string; ended: string }>;
         },
         idField: Record<string, string>,
     ): Promise<{ orderId: number } | { error: string }> {
@@ -820,6 +822,35 @@ class APIManager {
         };
         if (orderDraft.preferredDriversList?.length) {
             data.b_only_offer = 1;
+        }
+
+        // Плановое время окончания: без него сервер не может посчитать
+        // плановую смету, а плановые перерывы не с чем сопоставлять.
+        // hoursCount собирается у заказчика, но раньше никуда не передавался
+        const plannedStart = orderDraft.when ?? new Date();
+        const hours = Number(orderDraft.hoursCount);
+        if (Number.isFinite(hours) && hours > 0) {
+            data.b_end_datetime = formatDateAPI(
+                new Date(plannedStart.getTime() + hours * 3600_000),
+            );
+        }
+
+        // Плановые перерывы приходят парами ЧЧ:ММ — привязываем их к дате
+        // начала заказа. Интервал, попавший раньше начала, относим к
+        // следующим суткам: заказ может идти через полночь
+        if (orderDraft.plannedBreaks?.length) {
+            const base = orderDraft.when ?? new Date();
+            const atOrderDate = (time: string) => {
+                const [hours, minutes] = time.split(':').map(Number);
+                const value = new Date(base);
+                value.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+                if (value.getTime() < base.getTime()) value.setDate(value.getDate() + 1);
+                return value;
+            };
+            data.planned_breaks = orderDraft.plannedBreaks.map((item) => ({
+                started: formatDateAPI(atOrderDate(item.started)),
+                ended: formatDateAPI(atOrderDate(item.ended)),
+            }));
         }
 
         this.logger.info(`${this.tag} [createDrive] start`, {
