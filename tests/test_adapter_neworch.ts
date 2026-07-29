@@ -20,10 +20,16 @@ async function delay(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 process.env.DRIVER_SEARCH_LOG = '1';
 process.env.WHATSAPP_DEBUG = '1';
 async function runTest() {
+    // Прогон только через TestAdapter: Telegram и WhatsApp не поднимаются.
+    // Нужно, чтобы гонять сценарии против мока, не подключаясь к боевому боту
+    const adapterOnly = process.env.MULTIBOT_ADAPTER_ONLY === '1';
+
     const config: RootConfig = {
         api: {
             'default-api': {
-                url: 'https://ibronevik.ru/taxi/c/children/api/v1/',
+                // Позволяет прогнать сценарии против локального мока.
+                // Без переменной адрес прежний
+                url: process.env.MULTIBOT_API_URL || 'https://ibronevik.ru/taxi/c/children/api/v1/',
                 adminCredentials: { login: 'redacted@example.invalid', password: 'REDACTED-ADMIN-PASSWORD', type: 'e-mail' },
                 adminAuthFile: 'data/default-api.json'
             }
@@ -37,6 +43,7 @@ async function runTest() {
                 transport: { type: 'test' },
                 core: { name: 'children' }
             },
+            ...(adapterOnly ? {} : {
             'test-bot': {
                 api: 'default-api',
                 transport: {
@@ -54,15 +61,25 @@ async function runTest() {
                 },
                 core: { name: 'children' }
             },
+            }),
         }
     };
 
     const logger = new MegaLogger({ serviceName: 'TestBOTA' });
-    const engine = new Engine({ redis: { host: '127.0.0.1', port: 6379, password: 'REDACTED-REDIS-PASSWORD' } });
+
+    // Позволяет держать отдельный Redis для прогона против мока.
+    // Без переменных подключение прежнее
+    const redisOptions = {
+        host: process.env.MULTIBOT_REDIS_HOST || '127.0.0.1',
+        port: Number(process.env.MULTIBOT_REDIS_PORT || 6379),
+        password: process.env.MULTIBOT_REDIS_PASSWORD ?? 'REDACTED-REDIS-PASSWORD',
+    };
+
+    const engine = new Engine({ redis: redisOptions });
 
     // Очистка Redis
     const IORedis = require('ioredis');
-    const redis = new IORedis({ host: '127.0.0.1', port: 6379, password: 'REDACTED-REDIS-PASSWORD' });
+    const redis = new IORedis(redisOptions);
     try {
         const keys = await redis.keys('engine:*:state:*');
         const keys2 = await redis.keys('engine:*:stateData:*');
@@ -96,9 +113,11 @@ async function runTest() {
     // Запускаем оркестратор (Telegram / Test / WhatsApp — init в фоне где применимо)
     await orchestrator.start();
 
-    const waAdapter = orchestrator.getAdapter('test-whatsapp-bot');
-    assert(waAdapter, 'WhatsApp adapter should be created');
-    logger.info(`[test] WhatsApp adapter started: ${(waAdapter as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+    if (!adapterOnly) {
+        const waAdapter = orchestrator.getAdapter('test-whatsapp-bot');
+        assert(waAdapter, 'WhatsApp adapter should be created');
+        logger.info(`[test] WhatsApp adapter started: ${(waAdapter as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+    }
 
     // Получаем адаптер и API менеджер для тестов
     const adapter = orchestrator.getAdapter('test-adapter-bot') as any;
@@ -112,10 +131,10 @@ async function runTest() {
         await apiMgr.api_data_manager.load();
     }
 
-    //await run_tests_registration(orchestrator,adapter,apiMgr,logger);
-    //await run_tests_main(orchestrator,adapter,apiMgr,logger)
+    await run_tests_registration(orchestrator,adapter,apiMgr,logger);
+    await run_tests_main(orchestrator,adapter,apiMgr,logger)
 
-
+    process.exit(0);
 }
 
 runTest().catch(err => {
@@ -564,7 +583,11 @@ async function run_tests_main(orchestrator:Orchestrator,
         );
         const skipCount = sentEvents.length;
         logger.debug('📤 Sending: "0" (пропуск плановых перерывов)');
-        adapter.receiveMessage({ ...msg, id: `${msg.id}-breaks`, text: '0', location: undefined })
+
+        // Ключ location не передаём даже пустым: Orchestrator проверяет его
+        // через `'location' in msg`, и на undefined чтение широты падает
+        const { location: _skip, ...msgWithoutLocation } = msg;
+        adapter.receiveMessage({ ...msgWithoutLocation, id: (Date.now() + 77).toString(), text: '0' })
             .catch((e: string) => {
                 if (adapter.handlers?.error) adapter.handlers.error(e);
             });
@@ -682,7 +705,10 @@ async function run_tests_main(orchestrator:Orchestrator,
     await adapter.receiveMessage(msg1);
     await waitForMessages(1);
 
-    await expectMessage(0, localizationNames.commandNotFound, '1');
+    // По схеме main.start команда /start разрешена и выводит главное меню.
+    // Раньше здесь ожидалось «команда не распознана» — это проходило только
+    // на состоянии, оставшемся в Redis от прошлого прогона
+    await expectMessage(0, localizationNames.defaultPrompt, '1');
 
 
     sentEvents.length = 0;
