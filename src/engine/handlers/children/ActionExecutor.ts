@@ -186,6 +186,18 @@ export class ActionExecutor {
             case 'setRate':
                 await OrderActions.handleSetRate(ctx);
                 break;
+            case 'sendBreakStarted':
+                await OrderActions.handleSendBreakStarted(ctx);
+                break;
+            case 'sendBreakEnded':
+                await OrderActions.handleSendBreakEnded(ctx);
+                break;
+            case 'sendPlannedBreaksPrompt':
+                await OrderActions.handleSendPlannedBreaksPrompt(ctx);
+                break;
+            case 'sendPlannedBreaksError':
+                await OrderActions.handleSendPlannedBreaksError(ctx);
+                break;
             case 'setReview':
                 await OrderActions.handleSetReview(ctx);
                 break;
