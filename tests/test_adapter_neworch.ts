@@ -2,6 +2,11 @@
 
 import path from 'path';
 import assert from 'assert';
+import dotenv from 'dotenv';
+
+// Настройки прогона держим отдельно от .env приложения: у теста свой адрес
+// API, свой Redis и свой бот. Пример значений — tests/.env.example
+dotenv.config({ path: path.join(__dirname, '.env') });
 import {Orchestrator} from '../src/newManagers/orchestrator/Orchestrator'; // новый
 import type { RootConfig } from '../src/newManagers/orchestrator/types'; // только тип
 import Engine from '../src/engine';
