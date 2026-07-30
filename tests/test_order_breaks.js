@@ -56,10 +56,10 @@ async function run() {
   assert.equal(emitted.length, 1, 'без изменений событий быть не должно');
 
   // 3. Няня ушла на перерыв
-  current = orderData('break', [{ id: '1', started: '2026-07-28T12:35:00.000Z', ended: null, display: true }]);
+  current = orderData('break', [{ id: '1', started: '2026-07-28 12:35:00+00:00', ended: null, display: true }]);
   await tick();
   assert.equal(emitted.at(-1).event, 'order_status_break_started');
-  assert.equal(emitted.at(-1).payload.breakStartedAt, '2026-07-28T12:35:00.000Z');
+  assert.equal(emitted.at(-1).payload.breakStartedAt, '2026-07-28 12:35:00+00:00');
 
   // 4. Пока перерыв идёт, событие не повторяется
   await tick();
@@ -67,11 +67,11 @@ async function run() {
 
   // 5. Няня вернулась к работе
   current = orderData('work', [
-    { id: '1', started: '2026-07-28T12:35:00.000Z', ended: '2026-07-28T13:10:00.000Z', display: true },
+    { id: '1', started: '2026-07-28 12:35:00+00:00', ended: '2026-07-28 13:10:00+00:00', display: true },
   ]);
   await tick();
   assert.equal(emitted.at(-1).event, 'order_status_break_ended');
-  assert.equal(emitted.at(-1).payload.breakEndedAt, '2026-07-28T13:10:00.000Z');
+  assert.equal(emitted.at(-1).payload.breakEndedAt, '2026-07-28 13:10:00+00:00');
 
   // 6. Статус заказа при этом не переоткрывался
   const started = emitted.filter((e) => e.event === 'order_status_driver_started');
@@ -79,12 +79,12 @@ async function run() {
 
   // 7. Второй перерыв за тот же заказ
   current = orderData('break', [
-    { id: '1', started: '2026-07-28T12:35:00.000Z', ended: '2026-07-28T13:10:00.000Z', display: true },
-    { id: '2', started: '2026-07-28T15:00:00.000Z', ended: null, display: true },
+    { id: '1', started: '2026-07-28 12:35:00+00:00', ended: '2026-07-28 13:10:00+00:00', display: true },
+    { id: '2', started: '2026-07-28 15:00:00+00:00', ended: null, display: true },
   ]);
   await tick();
   assert.equal(emitted.at(-1).event, 'order_status_break_started');
-  assert.equal(emitted.at(-1).payload.breakStartedAt, '2026-07-28T15:00:00.000Z');
+  assert.equal(emitted.at(-1).payload.breakStartedAt, '2026-07-28 15:00:00+00:00');
 
   // 8. Завершение заказа во время перерыва (ТЗ п. 17)
   current = {
