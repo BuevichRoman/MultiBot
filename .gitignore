@@ -22,3 +22,6 @@ taxi-nanny-ui/
 # Кеш авторизации администратора: создаётся APIManager при первом входе.
 # Держать в репозитории нельзя — внутри рабочие token и u_hash
 data/default-api.json
+
+# Настройки локального прогона тестов (пример: tests/.env.example)
+tests/.env
