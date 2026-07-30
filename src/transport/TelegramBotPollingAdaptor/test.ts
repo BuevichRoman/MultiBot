@@ -15,8 +15,9 @@ import { Message } from '../Message';
 async function testTelegramAdapter() {
     console.log('\n🧪 Запуск теста Telegram адаптера...\n');
 
-    // 👇 ВСТАВЬ СЮДА СВОЙ РЕАЛЬНЫЙ ТОКЕН ОТ @BotFather
-    const token: string = "REDACTED-TELEGRAM-TOKEN";
+    // 👇 ТОКЕН ОТ @BotFather — через переменную окружения, не в коде:
+    // репозиторий публичный. Проверка ниже сработает, если не задан
+    const token: string = process.env.MULTIBOT_TELEGRAM_TOKEN ?? "";
 
     if (!token || token === "token") {
         console.error(`
