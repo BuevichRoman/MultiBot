@@ -174,7 +174,8 @@ async function testTelegramAdapter() {
 export async function testTokenOnly() {
     console.log('\n🧪 Проверка токена...\n');
 
-    const token = "REDACTED-TELEGRAM-TOKEN";
+    // Токен из окружения: держать в коде нельзя, репозиторий публичный
+    const token = process.env.MULTIBOT_TELEGRAM_TOKEN ?? "";
 
     try {
         const bot = new TelegramBotPollingAdaptor(
