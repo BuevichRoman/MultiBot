@@ -17,6 +17,24 @@ import {
 } from '../src/engine/children/order/orderConfirmation';
 
 async function delay(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
+/**
+ * Обязательная переменная окружения. Пустое значение допустимо — например,
+ * Redis без пароля, — а вот отсутствие переменной означает, что прогон
+ * настроен не полностью, и лучше упасть сразу с внятным сообщением.
+ *
+ * Доступы в коде не держим: репозиторий публичный. Пример — tests/.env.example
+ */
+function requireEnv(name: string): string {
+    const value = process.env[name];
+    if (value === undefined) {
+        throw new Error(
+            `Не задана переменная окружения ${name}. ` +
+            `Список нужных переменных — в tests/.env.example`,
+        );
+    }
+    return value;
+}
 process.env.DRIVER_SEARCH_LOG = '1';
 process.env.WHATSAPP_DEBUG = '1';
 async function runTest() {
@@ -27,10 +45,14 @@ async function runTest() {
     const config: RootConfig = {
         api: {
             'default-api': {
-                // Позволяет прогнать сценарии против локального мока.
-                // Без переменной адрес прежний
-                url: process.env.MULTIBOT_API_URL || 'https://ibronevik.ru/taxi/c/children/api/v1/',
-                adminCredentials: { login: 'redacted@example.invalid', password: 'REDACTED-ADMIN-PASSWORD', type: 'e-mail' },
+                // Адрес и доступы берутся из окружения: держать их в коде нельзя,
+                // репозиторий публичный. Пример — tests/.env.example
+                url: requireEnv('MULTIBOT_API_URL'),
+                adminCredentials: {
+                    login: requireEnv('MULTIBOT_ADMIN_LOGIN'),
+                    password: requireEnv('MULTIBOT_ADMIN_PASSWORD'),
+                    type: 'e-mail',
+                },
                 adminAuthFile: 'data/default-api.json'
             }
         },
@@ -48,7 +70,7 @@ async function runTest() {
                 api: 'default-api',
                 transport: {
                     type: 'telegram-bot-polling',
-                    token: 'REDACTED-TELEGRAM-TOKEN'
+                    token: requireEnv('MULTIBOT_TELEGRAM_TOKEN')
                 },
                 core: { name: 'children' }
             },
@@ -68,11 +90,11 @@ async function runTest() {
     const logger = new MegaLogger({ serviceName: 'TestBOTA' });
 
     // Позволяет держать отдельный Redis для прогона против мока.
-    // Без переменных подключение прежнее
+    // Пароль — из окружения; пустая строка означает Redis без пароля
     const redisOptions = {
         host: process.env.MULTIBOT_REDIS_HOST || '127.0.0.1',
         port: Number(process.env.MULTIBOT_REDIS_PORT || 6379),
-        password: process.env.MULTIBOT_REDIS_PASSWORD ?? 'REDACTED-REDIS-PASSWORD',
+        password: requireEnv('MULTIBOT_REDIS_PASSWORD'),
     };
 
     const engine = new Engine({ redis: redisOptions });
