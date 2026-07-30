@@ -43,9 +43,12 @@ function requireEnv(name: string): string {
 process.env.DRIVER_SEARCH_LOG = '1';
 process.env.WHATSAPP_DEBUG = '1';
 async function runTest() {
-    // Прогон только через TestAdapter: Telegram и WhatsApp не поднимаются.
-    // Нужно, чтобы гонять сценарии против мока, не подключаясь к боевому боту
-    const adapterOnly = process.env.MULTIBOT_ADAPTER_ONLY === '1';
+    // Транспорты включаются по отдельности и по умолчанию выключены: сценарии
+    // гоняются через TestAdapter, которому ни Telegram, ни WhatsApp не нужны.
+    // Раньше был один флаг на оба, и включить только Telegram было нельзя —
+    // вместе с ним поднимался WhatsApp Web и просил сканировать QR
+    const withTelegram = process.env.MULTIBOT_TELEGRAM === '1';
+    const withWhatsapp = process.env.MULTIBOT_WHATSAPP === '1';
 
     const config: RootConfig = {
         api: {
@@ -70,7 +73,7 @@ async function runTest() {
                 transport: { type: 'test' },
                 core: { name: 'children' }
             },
-            ...(adapterOnly ? {} : {
+            ...(withTelegram ? {
             'test-bot': {
                 api: 'default-api',
                 transport: {
@@ -79,6 +82,8 @@ async function runTest() {
                 },
                 core: { name: 'children' }
             },
+            } : {}),
+            ...(withWhatsapp ? {
             /** WhatsApp Web: сессия в отдельной папке; init идёт в фоне в Orchestrator.start() */
             'test-whatsapp-bot': {
                 api: 'default-api',
@@ -88,7 +93,7 @@ async function runTest() {
                 },
                 core: { name: 'children' }
             },
-            }),
+            } : {}),
         }
     };
 
@@ -140,7 +145,13 @@ async function runTest() {
     // Запускаем оркестратор (Telegram / Test / WhatsApp — init в фоне где применимо)
     await orchestrator.start();
 
-    if (!adapterOnly) {
+    if (withTelegram) {
+        const tgAdapter = orchestrator.getAdapter('test-bot');
+        assert(tgAdapter, 'Telegram adapter should be created');
+        logger.info(`[test] Telegram adapter started: ${(tgAdapter as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+    }
+
+    if (withWhatsapp) {
         const waAdapter = orchestrator.getAdapter('test-whatsapp-bot');
         assert(waAdapter, 'WhatsApp adapter should be created');
         logger.info(`[test] WhatsApp adapter started: ${(waAdapter as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
