@@ -540,12 +540,16 @@ class APIManager {
                 this.logger.warn(`${this.tag} [getOrderState] no booking for orderId`, { orderId });
                 return null;
             }
+            // Перерывы лежат внутри b_options: произвольные поля заказа
+            // допустимы только там и только из списка b_options_valid_keys.
+            // server_time боевой API не отдаёт — поле остаётся на случай,
+            // если ответ его всё-таки содержит
             return {
                 b_state: Number(booking.b_state),
                 b_start_datetime: booking.b_start_datetime,
                 b_max_waiting_list: booking.b_max_waiting_list,
                 drivers: booking.drivers,
-                b_execution: booking.b_execution,
+                b_execution: booking.b_options?.b_execution,
                 server_time: response.data?.data?.server_time ?? booking.server_time,
             };
         } catch (e: any) {
@@ -824,13 +828,14 @@ class APIManager {
             data.b_only_offer = 1;
         }
 
-        // Плановое время окончания: без него сервер не может посчитать
-        // плановую смету, а плановые перерывы не с чем сопоставлять.
-        // hoursCount собирается у заказчика, но раньше никуда не передавался
+        // Плановое время окончания: без него не с чем сопоставлять плановые
+        // перерывы, а duration в формуле цены уходит нулём. hoursCount
+        // собирается у заказчика, но раньше никуда не передавался.
+        // Кладём в b_options: своего поля под длительность в схеме заказа нет
         const plannedStart = orderDraft.when ?? new Date();
         const hours = Number(orderDraft.hoursCount);
         if (Number.isFinite(hours) && hours > 0) {
-            data.b_end_datetime = formatDateAPI(
+            data.b_options.b_end_datetime = formatDateAPI(
                 new Date(plannedStart.getTime() + hours * 3600_000),
             );
         }
@@ -847,10 +852,14 @@ class APIManager {
                 if (value.getTime() < base.getTime()) value.setDate(value.getDate() + 1);
                 return value;
             };
-            data.planned_breaks = orderDraft.plannedBreaks.map((item) => ({
-                started: formatDateAPI(atOrderDate(item.started)),
-                ended: formatDateAPI(atOrderDate(item.ended)),
-            }));
+            data.b_options.b_execution = {
+                estimate: {
+                    breaks: orderDraft.plannedBreaks.map((item) => ({
+                        started: formatDateAPI(atOrderDate(item.started)),
+                        ended: formatDateAPI(atOrderDate(item.ended)),
+                    })),
+                },
+            };
         }
 
         this.logger.info(`${this.tag} [createDrive] start`, {
