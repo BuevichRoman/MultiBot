@@ -230,6 +230,9 @@ export class ActionExecutor {
                 break;
             case 'sendOrderCompleted':
                 await OrderActions.handleSendOrderCompleted(ctx);
+                // Итог по перерывам идёт следом за сообщением о завершении,
+                // порядок важен: иначе итог приходит раньше самого события
+                await OrderActions.handleSendBreaksFinal(ctx);
                 break;
             case 'sendSettingsMenu':
                 await SettingsActions.handleSendSettingsMenu(ctx);

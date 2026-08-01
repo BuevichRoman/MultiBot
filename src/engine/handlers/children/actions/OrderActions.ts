@@ -354,6 +354,10 @@ const BREAK_TEXTS: Record<string, string> = {
     wab_breakstarted: 'Няня начала перерыв в %time%.',
     wab_breakended: 'Няня завершила перерыв в %time%.',
     wab_breaksummary: 'Перерывов: %count%, суммарно %breaks%. Рабочее время: %work%.',
+    wab_breaksfinal:
+        'Итог по времени. Общее время заказа: %total%. Рабочее время: %work%. ' +
+        'Перерывы: %breaks% (%count%).',
+    wab_breaksfinalitem: '· %from% — %to% (%duration%)',
     wab_plannedbreaksprompt:
         'Планируются ли перерывы? Укажите их в формате 11:00-12:00, ' +
         'несколько — через запятую. Отправьте 0, если перерывов не планируется.',
@@ -439,6 +443,42 @@ export async function handleSendBreakEnded(ctx: ActionContext): Promise<void> {
             .replace(/%breaks%/g, formatBreakDuration(actual?.break_seconds))
             .replace(/%work%/g, formatBreakDuration(actual?.work_seconds)),
     );
+}
+
+/**
+ * Итог по перерывам после завершения заказа (ТЗ п. 10).
+ *
+ * Отправляется следом за сообщением о завершении. Если перерывов не было,
+ * лишнего сообщения не шлём
+ */
+export async function handleSendBreaksFinal(ctx: ActionContext): Promise<void> {
+    const loaded = await loadExecution(ctx);
+    const actual = loaded?.execution?.actual;
+    if (!actual) return;
+
+    const breaks = (actual.breaks ?? []).filter((item: any) => item.ended != null);
+    if (!breaks.length) return;
+
+    // Счётчик и список — только видимые, суммы — все (ТЗ п. 20)
+    const visible = breaks.filter((item: any) => item.display);
+    const template = await breakText(ctx, 'wab_breaksfinal', loaded?.lang);
+    const head = template
+        .replace(/%total%/g, formatBreakDuration(actual.total_seconds))
+        .replace(/%work%/g, formatBreakDuration(actual.work_seconds))
+        .replace(/%breaks%/g, formatBreakDuration(actual.break_seconds))
+        .replace(/%count%/g, String(visible.length));
+
+    const itemTemplate = await breakText(ctx, 'wab_breaksfinalitem', loaded?.lang);
+    const lines = visible.map((item: any) =>
+        itemTemplate
+            .replace(/%from%/g, formatBreakTime(item.started))
+            .replace(/%to%/g, formatBreakTime(item.ended))
+            .replace(/%duration%/g, formatBreakDuration(
+                (new Date(item.ended).getTime() - new Date(item.started).getTime()) / 1000,
+            )),
+    );
+
+    await ctx.sendMessage([head, ...lines].join('\n'));
 }
 
 /** Приглашение указать плановые перерывы при создании заказа (ТЗ п. 5) */
