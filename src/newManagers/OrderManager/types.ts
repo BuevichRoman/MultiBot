@@ -30,18 +30,16 @@ export interface OrderBreak {
 }
 
 /**
- * Показатели выполнения заказа: план, факт и текущий режим.
- * Все величины считает сервер, бот их только отображает
+ * Ход выполнения со стороны няни: режим и фактические перерывы.
+ * Лежит в `c_options.c_execution` — своём поле исполнителя по заказу.
+ *
+ * Все величины считает приложение няни, бот их только отображает. Сервер
+ * ничего не пересчитывает: для него это просто сохранённый JSON
  */
 export interface OrderExecution {
   schema_version?: number;
   /** null до начала работы и после завершения заказа */
   mode: 'work' | 'break' | null;
-  estimate?: {
-    total_seconds: number;
-    work_seconds: number;
-    break_seconds: number;
-  } | null;
   actual?: {
     started?: string | null;
     ended?: string | null;
@@ -57,7 +55,7 @@ export interface OrderExecution {
 export interface RawOrderData {
   b_state: number;
   b_start_datetime?: string;
-  /** Перерывы и время по плану и факту. Нет у заказов до включения функционала */
+  /** Факт из c_options няни. Нет, пока она не отметила ни одного перерыва */
   b_execution?: OrderExecution;
   /** Время сервера на момент ответа */
   server_time?: string;

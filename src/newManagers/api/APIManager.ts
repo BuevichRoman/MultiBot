@@ -14,6 +14,40 @@ import {CacheVersion} from "./types/cacheVersion";
 import fs from "fs";
 import path from "path";
 
+/**
+ * Разбор заказа из ответа `drive/get`.
+ *
+ * Вынесено из метода отдельно, чтобы стык с формой ответа боевого API можно
+ * было проверить тестом без сети: именно здесь пряталась ошибка, когда бот
+ * искал перерывы не в том месте.
+ *
+ * План и факт хранятся раздельно. План кладёт заказчик при создании заказа
+ * в `b_options.b_execution`, факт пишет няня в своём `c_options.c_execution`:
+ * метод `edit` разрешает исполнителю только `c_options`, `b_options` ему
+ * недоступен.
+ *
+ * `server_time` боевой API не отдаёт — поле остаётся на случай, если ответ
+ * его всё-таки содержит.
+ */
+export function mapOrderState(
+    booking: any,
+    serverTime?: string,
+): import('../OrderManager/types').RawOrderData {
+    const drivers: any[] = booking.drivers ?? [];
+    const execution = drivers
+        .map(item => item?.c_options?.c_execution)
+        .find(Boolean);
+
+    return {
+        b_state: Number(booking.b_state),
+        b_start_datetime: booking.b_start_datetime,
+        b_max_waiting_list: booking.b_max_waiting_list,
+        drivers: booking.drivers,
+        b_execution: execution,
+        server_time: serverTime ?? booking.server_time,
+    };
+}
+
 interface AdminCredentials {
     login: string;
     password: string;
@@ -540,18 +574,7 @@ class APIManager {
                 this.logger.warn(`${this.tag} [getOrderState] no booking for orderId`, { orderId });
                 return null;
             }
-            // Перерывы лежат внутри b_options: произвольные поля заказа
-            // допустимы только там и только из списка b_options_valid_keys.
-            // server_time боевой API не отдаёт — поле остаётся на случай,
-            // если ответ его всё-таки содержит
-            return {
-                b_state: Number(booking.b_state),
-                b_start_datetime: booking.b_start_datetime,
-                b_max_waiting_list: booking.b_max_waiting_list,
-                drivers: booking.drivers,
-                b_execution: booking.b_options?.b_execution,
-                server_time: response.data?.data?.server_time ?? booking.server_time,
-            };
+            return mapOrderState(booking, response.data?.data?.server_time);
         } catch (e: any) {
             this.logger.warn(`${this.tag} [getOrderState] error`, { orderId, error: e?.message });
             return null;
