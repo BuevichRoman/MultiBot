@@ -830,13 +830,24 @@ async function run_tests_main(orchestrator:Orchestrator,
         }
     );
 
-    // main.confirm: "2" -> отмена
+    // main.confirm: "2" не предусмотрено — текст подтверждения предлагает
+    // только "1" и "0", поэтому лишний ответ должен отбиваться, а не
+    // проглатываться молча
     sentEvents.length = 0;
     await sendAndExpect(
         { ...msg1, id: (Date.now()+1).toString(), text: '2' },
+        localizationNames.commandNotFound,
+        '1',
+        'Confirm: "2" -> command not found'
+    );
+
+    // main.confirm: "0" -> отмена
+    sentEvents.length = 0;
+    await sendAndExpect(
+        { ...msg1, id: (Date.now()+2).toString(), text: '0' },
         localizationNames.orderCanceled,
         '1',
-        'Confirm cancel (2) -> main.start'
+        'Confirm cancel (0) -> main.start'
     );
     // После отмены должно прийти sendDefaultMenu
     await expectMessage(1, localizationNames.defaultPrompt, '1');

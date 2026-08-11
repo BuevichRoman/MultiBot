@@ -309,7 +309,9 @@ class Orchestrator {
                     text: (msg as any).type === 'text' ? (msg as any).text : '',
                 timestamp: new Date(),
                 raw: msg,
-                ...('location' in msg && {
+                // Проверяем значение, а не наличие ключа: сообщение с пустым
+                // location роняло обращение к latitude
+                ...((msg as any).location && {
                     location: {
                         latitude: (msg as any).location.latitude,
                         longitude: (msg as any).location.longitude,

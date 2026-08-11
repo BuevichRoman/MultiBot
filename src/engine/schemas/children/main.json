@@ -663,8 +663,8 @@
       "validation": {
         "type": "choice",
         "allowed": [
-          "1",
-          "2"
+          "0",
+          "1"
         ],
         "mapping": {
           "0": {
