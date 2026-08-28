@@ -95,6 +95,13 @@ export interface OrderWatchEntry {
    * машина состояний всё время остаётся в order_status_driver_started
    */
   lastExecutionMode?: 'work' | 'break' | null;
+  /**
+   * Что уже сообщено по каждому перерыву, по его id. Одного режима мало:
+   * между двумя опросами он может смениться дважды, и тогда одинаковый mode
+   * скрывает и окончание перерыва, и начало следующего. Состав breaks[]
+   * это различает
+   */
+  breakStates?: Record<string, 'started' | 'ended'>;
   /** Доп. данные (для расширений) */
   meta?: Record<string, unknown>;
 }

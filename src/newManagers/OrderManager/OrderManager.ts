@@ -245,35 +245,57 @@ export class OrderManager {
    * Ведутся отдельно от основной машины состояний: во время перерыва заказ
    * остаётся выполняющимся, поэтому deriveEvent всё это время возвращает
    * order_status_driver_started и по нему перерыв не отследить.
+   *
+   * Смотрим на состав actual.breaks[], а не на один b_execution.mode:
+   * перерыв, целиком уложившийся между двумя опросами, режимом не виден —
+   * на обоих опросах он тот же самый.
    */
   private async emitBreakChange(entry: OrderWatchEntry, data: RawOrderData): Promise<void> {
     const mode = data.b_execution?.mode ?? null;
-    const previous = entry.lastExecutionMode;
-
-    if (mode === previous) return;
+    const breaks = data.b_execution?.actual?.breaks ?? [];
+    const firstPoll = entry.lastExecutionMode === undefined;
     entry.lastExecutionMode = mode;
 
-    // Первый опрос: режим ещё не наблюдался, уведомлять не о чем
-    if (previous === undefined) return;
+    const known = entry.breakStates ?? (entry.breakStates = {});
 
-    if (mode === 'break') {
-      const active = data.b_execution?.actual?.breaks?.find((item) => item.ended == null);
-      await this.emit(entry, ORDER_STATUS_EVENTS.BREAK_STARTED, {
-        breakStartedAt: active?.started,
-      });
+    // Первый опрос: заказ мог попасть под наблюдение уже с перерывами,
+    // уведомлять о них задним числом не о чем
+    if (firstPoll) {
+      for (const item of breaks) {
+        known[item.id] = item.ended == null ? 'started' : 'ended';
+      }
       return;
     }
 
-    // Об окончании перерыва сообщаем, только если заказ продолжается.
-    // При завершении заказа во время перерыва приложение няни закрывает
-    // интервал само и снимает режим (ТЗ п. 17), а заказчик получает
-    // итоговое уведомление о завершении — отдельное «перерыв окончен»
-    // после него было бы лишним
-    if (previous === 'break' && mode === 'work') {
-      const breaks = data.b_execution?.actual?.breaks ?? [];
-      const last = breaks[breaks.length - 1];
+    for (const item of breaks) {
+      const active = item.ended == null;
+
+      if (known[item.id] === undefined) {
+        // Перерыв, пропущенный целиком: о слишком коротком не сообщаем,
+        // его и в списках нет (ТЗ п. 20), но в суммах он остаётся
+        if (!active && item.display === false) {
+          known[item.id] = 'ended';
+          continue;
+        }
+        known[item.id] = 'started';
+        await this.emit(entry, ORDER_STATUS_EVENTS.BREAK_STARTED, {
+          breakStartedAt: item.started,
+        });
+      }
+
+      if (active || known[item.id] === 'ended') continue;
+
+      known[item.id] = 'ended';
+
+      // Об окончании сообщаем, только если заказ продолжается.
+      // При завершении заказа во время перерыва приложение няни закрывает
+      // интервал само и снимает режим (ТЗ п. 17), а заказчик получает
+      // итоговое уведомление о завершении — отдельное «перерыв окончен»
+      // после него было бы лишним
+      if (mode === null) continue;
+
       await this.emit(entry, ORDER_STATUS_EVENTS.BREAK_ENDED, {
-        breakEndedAt: last?.ended ?? undefined,
+        breakEndedAt: item.ended,
         breakSeconds: data.b_execution?.actual?.break_seconds,
       });
     }
