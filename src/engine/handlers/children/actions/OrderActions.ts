@@ -392,8 +392,13 @@ function formatBreakDuration(seconds?: number): string {
 }
 
 /**
- * Читает актуальное состояние заказа. Время берём с сервера, а не из
- * события — так метки остаются серверными даже если событие задержалось
+ * Читает актуальное состояние заказа. Нужно там, где показываются суммы:
+ * их считает приложение няни и в событии их нет.
+ *
+ * Метки времени самого перерыва отсюда не берём: пока идёт чтение, няня
+ * может успеть начать следующий перерыв, и последний интервал в ответе
+ * будет уже не тот, о котором событие. Время приходит в событии, оно
+ * тоже серверное — OrderManager взял его из этого же ответа API
  */
 async function loadExecution(ctx: ActionContext) {
     const container = await ctx.getData();
@@ -412,36 +417,54 @@ async function loadExecution(ctx: ActionContext) {
     }
 }
 
+/** Данные события перерыва, сохранённые обработчиком system event */
+async function breakEventOf(ctx: ActionContext) {
+    const container = await ctx.getData();
+    return {
+        lang: String(container?.user?.lang ?? '1'),
+        event: (container?.order?.breakEvent ?? {}) as {
+            startedAt?: string;
+            endedAt?: string;
+            breakSeconds?: number;
+        },
+    };
+}
+
 /** Уведомление о начале перерыва (ТЗ п. 10) */
 export async function handleSendBreakStarted(ctx: ActionContext): Promise<void> {
-    const loaded = await loadExecution(ctx);
-    if (!loaded) return;
+    const { lang, event } = await breakEventOf(ctx);
 
-    const active = loaded.execution?.actual?.breaks?.find((item: any) => item.ended == null);
-    const template = await breakText(ctx, 'wab_breakstarted', loaded.lang);
-    await ctx.sendMessage(template.replace(/%time%/g, formatBreakTime(active?.started)));
+    // Запасной путь на случай вызова действия без события
+    const startedAt = event.startedAt
+        ?? (await loadExecution(ctx))?.execution?.actual?.breaks
+            ?.find((item: any) => item.ended == null)?.started;
+
+    const template = await breakText(ctx, 'wab_breakstarted', lang);
+    await ctx.sendMessage(template.replace(/%time%/g, formatBreakTime(startedAt)));
 }
 
 /** Уведомление об окончании перерыва и текущие итоги (ТЗ п. 9, 10) */
 export async function handleSendBreakEnded(ctx: ActionContext): Promise<void> {
+    const { lang, event } = await breakEventOf(ctx);
     const loaded = await loadExecution(ctx);
-    if (!loaded) return;
 
-    const actual = loaded.execution?.actual;
+    const actual = loaded?.execution?.actual;
     const breaks = actual?.breaks ?? [];
-    const last = breaks[breaks.length - 1];
+    const endedAt = event.endedAt ?? breaks[breaks.length - 1]?.ended;
 
-    const template = await breakText(ctx, 'wab_breakended', loaded.lang);
-    await ctx.sendMessage(template.replace(/%time%/g, formatBreakTime(last?.ended)));
+    const template = await breakText(ctx, 'wab_breakended', lang);
+    await ctx.sendMessage(template.replace(/%time%/g, formatBreakTime(endedAt)));
+
+    if (!actual) return;
 
     // Счётчик показывает только видимые перерывы, суммы — все (ТЗ п. 20)
     const visible = breaks.filter((item: any) => item.display && item.ended != null).length;
-    const summary = await breakText(ctx, 'wab_breaksummary', loaded.lang);
+    const summary = await breakText(ctx, 'wab_breaksummary', lang);
     await ctx.sendMessage(
         summary
             .replace(/%count%/g, String(visible))
-            .replace(/%breaks%/g, formatBreakDuration(actual?.break_seconds))
-            .replace(/%work%/g, formatBreakDuration(actual?.work_seconds)),
+            .replace(/%breaks%/g, formatBreakDuration(actual.break_seconds))
+            .replace(/%work%/g, formatBreakDuration(actual.work_seconds)),
     );
 }
 

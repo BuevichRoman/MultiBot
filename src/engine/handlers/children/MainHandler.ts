@@ -154,6 +154,28 @@ export class MainHandler extends BaseHandler {
         let data: Record<string, any> | undefined;
         if (ctx.isSystemEvent && ctx.event) {
             event = ctx.event;
+            // Метки времени перерыва живут только в событии: к моменту
+            // показа состояние заказа может уже уйти вперёд (ТЗ п. 10)
+            if (
+                (event === 'order_status_break_started' || event === 'order_status_break_ended')
+                && ctx.payload
+            ) {
+                const p = ctx.payload as Record<string, unknown>;
+                await this.fsm.mergeData(
+                    this.tenantId,
+                    userIdStr,
+                    {
+                        order: {
+                            breakEvent: {
+                                startedAt: p.breakStartedAt,
+                                endedAt: p.breakEndedAt,
+                                breakSeconds: p.breakSeconds,
+                            },
+                        },
+                    },
+                    botId,
+                );
+            }
             if (event === 'drivers_found' && ctx.payload) {
                 const p = ctx.payload as Record<string, unknown>;
                 await this.fsm.mergeData(
