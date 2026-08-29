@@ -4,6 +4,7 @@ import { CANCEL_REASON_KEYS } from '../../../children/settings/settingsHelpers';
 import type { ActionContext } from './types';
 import { getOrderInputSlice } from '../fsmStorage';
 import { getTaggedLogger, logBusinessEvent } from '../../../../addons/logger';
+import { captureError } from '../../../../addons/monitoring';
 import { formatPriceFormula } from '../../../children/order/priceCalculation';
 
 const orderActLog = getTaggedLogger('OrderActions');
@@ -334,6 +335,7 @@ export async function handleCancelOrderWithReason(ctx: ActionContext): Promise<v
         await ctx.apiManager.cancelOrder?.(String(orderId), reason, ctx.getIdField());
     } catch (e) {
         orderActLog.error('[handleCancelOrderWithReason] cancelOrder failed', { error: e });
+        captureError(e, { tenantId: ctx.tenantId, orderId: String(orderId), scope: 'cancel-order' });
     }
     const orderManager = ctx.orchestrator?.getOrderManager?.(ctx.tenantId);
     if (orderManager?.unregisterOrder) {
@@ -413,6 +415,7 @@ async function loadExecution(ctx: ActionContext) {
         };
     } catch (e) {
         orderActLog.error('[breaks] getOrderState failed', { orderId, error: e });
+        captureError(e, { tenantId: ctx.tenantId, orderId: String(orderId), scope: 'break-state' });
         return null;
     }
 }

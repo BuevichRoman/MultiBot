@@ -25,3 +25,6 @@ data/default-api.json
 
 # Настройки локального прогона тестов (пример: tests/.env.example)
 tests/.env
+
+# Настройки запуска бота (пример: .env.example). Внутри DSN мониторинга
+.env

@@ -8,6 +8,7 @@ import type {
 } from './types';
 import { ORDER_STATUS_EVENTS } from './types';
 import { getTaggedLogger } from '../../addons/logger';
+import { captureError } from '../../addons/monitoring';
 
 const orderMgrLog = getTaggedLogger('OrderManager');
 
@@ -232,9 +233,17 @@ export class OrderManager {
           this.activeOrders.delete(orderId);
         }
       } catch (err) {
-        if (orderManagerLoggingEnabled()) {
-          orderMgrLog.error('tick error', { tenantId: this.tenantId, orderId, error: err });
-        }
+        // Ошибка опроса гасится намеренно — остальные заказы должны
+        // обойтись без неё, — но раньше её не было видно вообще: заказ
+        // просто переставал слать уведомления. Лог теперь безусловный
+        orderMgrLog.error('tick error', { tenantId: this.tenantId, orderId, error: err });
+        captureError(err, {
+          tenantId: this.tenantId,
+          orderId,
+          chatId: entry.chatId,
+          userId: entry.userId,
+          scope: 'order-poll',
+        });
       }
     }
   }
