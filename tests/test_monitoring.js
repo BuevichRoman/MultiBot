@@ -112,7 +112,42 @@ async function run() {
     assert.equal(event.extra.chatId, 'chat-1');
   }
 
-  // 4. Без DSN модуль молчит: на стенде и в тестах событий быть не должно.
+  // 4. Необработанное исключение по-прежнему роняет процесс.
+  //    SDK по умолчанию перехватывает его и оставляет процесс жить, если
+  //    на uncaughtException уже висит чужой обработчик — а он висит,
+  //    winston ставит свой. Бот в неизвестном состоянии хуже, чем упавший
+  //    и перезапущенный, поэтому падение возвращено явной настройкой
+  {
+    const { execFileSync } = require('node:child_process');
+    const before = eventsOf(receiver.envelopes).length;
+    let code = 0;
+    let output = '';
+
+    try {
+      output = execFileSync(process.execPath, ['-e', `
+        const m = require('${process.cwd()}/dist/src/addons/monitoring/index.js');
+        m.initMonitoring();
+        setTimeout(() => { throw new Error('необработанное'); }, 10);
+        setTimeout(() => { console.log('ВЫЖИЛ'); process.exit(0); }, 8000);
+      `], { env: { ...process.env, SENTRY_DSN: receiver.dsn }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      code = e.status;
+      output = String(e.stdout || '');
+    }
+
+    // Конверт мог прийти уже после выхода процесса
+    await new Promise((done) => setTimeout(done, 300));
+
+    assert.equal(code, 1, 'процесс должен упасть, как и без мониторинга');
+    assert.doesNotMatch(output, /ВЫЖИЛ/, 'исключение не должно проглатываться');
+    assert.equal(
+      eventsOf(receiver.envelopes).length,
+      before + 1,
+      'падение должно успеть уйти в мониторинг',
+    );
+  }
+
+  // 5. Без DSN модуль молчит: на стенде и в тестах событий быть не должно.
   //    Состояние модуля живёт в процессе, поэтому проверяем отдельным
   const { execFileSync } = require('node:child_process');
   const before = receiver.envelopes.length;

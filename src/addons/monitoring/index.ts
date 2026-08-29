@@ -53,6 +53,14 @@ export function initMonitoring(): void {
         environment: process.env.SENTRY_ENV || process.env.NODE_ENV || 'development',
         release: process.env.SENTRY_RELEASE,
         tracesSampleRate: 0,
+        integrations: [
+            // Без этого SDK перехватывает необработанное исключение и
+            // оставляет процесс жить: бот продолжал бы работать в неизвестном
+            // состоянии вместо того, чтобы упасть и перезапуститься
+            Sentry.onUncaughtExceptionIntegration({
+                exitEvenIfOtherHandlersAreRegistered: true,
+            }),
+        ],
     });
 
     enabled = true;
