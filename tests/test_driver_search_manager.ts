@@ -19,11 +19,13 @@ async function delay(ms: number) {
 
 const LIVE_TEST = process.argv.includes('--live');
 
+// Доступы в коде не держим: репозиторий публичный. Нужны только для прогона
+// с флагом --live; список переменных — в tests/.env.example
 const REAL_API_CONFIG = {
-  url: 'https://ibronevik.ru/taxi/c/children/api/v1/',
+  url: process.env.MULTIBOT_API_URL ?? '',
   adminCredentials: {
-    login: 'redacted@example.invalid',
-    password: 'REDACTED-ADMIN-PASSWORD',
+    login: process.env.MULTIBOT_ADMIN_LOGIN ?? '',
+    password: process.env.MULTIBOT_ADMIN_PASSWORD ?? '',
     type: 'e-mail' as const,
   },
   adminAuthFile: path.join(process.cwd(), 'data', 'default-api.json'),

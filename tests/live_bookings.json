@@ -1,0 +1,288 @@
+{
+ "4137": {
+  "b_id": "4137",
+  "u_id": "888",
+  "b_start_address": "Málaga, Calle Larios 1",
+  "b_start_latitude": "36.720160",
+  "b_start_longitude": "-4.420340",
+  "b_destination_address": "",
+  "b_destination_latitude": null,
+  "b_destination_longitude": null,
+  "b_start_datetime": "2026-08-09 16:12:45+03:00",
+  "b_custom_comment": "",
+  "b_flight_number": "",
+  "b_terminal": "",
+  "b_passengers_count": "1",
+  "b_luggage_count": "0",
+  "b_placard": "",
+  "b_car_class": "1",
+  "b_offers": null,
+  "b_payment_way": "1",
+  "b_payment_card": null,
+  "b_confirmation_limit": null,
+  "b_confirmation_datetime": null,
+  "b_payment_sum": null,
+  "b_payment_datetime": null,
+  "b_driver_code": "",
+  "b_attempts": null,
+  "b_tips": null,
+  "b_state": "4",
+  "b_rating": null,
+  "b_created": "2026-08-09 13:12:46+03:00",
+  "b_confirm_state": 1,
+  "b_cars_count": "1",
+  "b_cancel_reason": null,
+  "b_cancel_states": null,
+  "b_approved": "2026-08-09 13:12:52+03:00",
+  "b_canceled": null,
+  "b_completed": "2026-08-09 13:18:06+03:00",
+  "b_max_waiting": 180,
+  "b_max_waiting_list": {
+   "1": {
+    "additional": "180",
+    "created": "2026-08-09 13:12:46+03:00"
+   }
+  },
+  "b_estimate_waiting": null,
+  "b_options": {
+   "pricingModel": {
+    "formula": "(base_price+distance*price_per_km+duration*price_per_minute)*time_ratio*car_class_ratio+options_sum+submit_price",
+    "options": {
+     "base_price": 200,
+     "distance": 0,
+     "price_per_km": 10,
+     "duration": 360,
+     "price_per_minute": 5,
+     "time_ratio": 1,
+     "options_sum": 0,
+     "submit_price": 0,
+     "car_class_ratio": 1
+    },
+    "calculationType": "incomplete"
+   },
+   "b_end_datetime": "2026-08-09 22:12:45+03:00",
+   "b_execution": {
+    "schema_version": 1,
+    "estimate": {
+     "started": "2026-08-09 16:12:45+03:00",
+     "ended": "2026-08-09 22:12:45+03:00",
+     "breaks": [
+      {
+       "started": "2026-08-09 18:12:45+03:00",
+       "ended": "2026-08-09 18:42:45+03:00"
+      },
+      {
+       "started": "2026-08-09 20:12:45+03:00",
+       "ended": "2026-08-09 20:42:45+03:00"
+      }
+     ],
+     "total_seconds": 21600,
+     "work_seconds": 18000,
+     "break_seconds": 3600,
+     "billable_work_seconds": 18000
+    }
+   }
+  },
+  "b_contact": null,
+  "b_location_class": "1",
+  "b_distance_estimate": null,
+  "b_price_estimate": null,
+  "b_currency": null,
+  "b_night": null,
+  "kind": "1",
+  "upper": null,
+  "drivers": [
+   {
+    "c_options": {
+     "c_execution": {
+      "schema_version": 1,
+      "mode": null,
+      "actual": {
+       "started": "2026-08-09 13:13:04+03:00",
+       "ended": "2026-08-09 13:18:05+03:00",
+       "breaks": [
+        {
+         "id": "1-1786270580000",
+         "started": "2026-08-09 13:16:20+03:00",
+         "ended": "2026-08-09 13:16:46+03:00",
+         "display": false
+        }
+       ],
+       "total_seconds": 301,
+       "work_seconds": 275,
+       "break_seconds": 26,
+       "billable_work_seconds": 300
+      }
+     }
+    },
+    "c_tips": null,
+    "c_completed": "2026-08-09 13:18:06+03:00",
+    "c_started": "2026-08-09 13:13:04+03:00",
+    "c_arrived": "2026-08-09 13:12:55+03:00",
+    "c_canceled": null,
+    "c_appointed": "2026-08-09 13:12:52+03:00",
+    "c_becomed_candidate": null,
+    "c_rating": "5",
+    "c_cancel_reason": null,
+    "l_datetime": null,
+    "c_longitude": "",
+    "c_latitude": "",
+    "c_state": "6",
+    "c_id": "105",
+    "u_id": "887",
+    "c_arrive_state": 1
+   }
+  ],
+  "b_comments": null,
+  "b_services": null,
+  "countries_list_start": "ma",
+  "countries_list_destination": "ma",
+  "region_start": null,
+  "region_destination": null,
+  "city_start": null,
+  "city_destination": null
+ },
+ "4138": {
+  "b_id": "4138",
+  "u_id": "888",
+  "b_start_address": "Málaga, Calle Larios 1",
+  "b_start_latitude": "36.720160",
+  "b_start_longitude": "-4.420340",
+  "b_destination_address": "",
+  "b_destination_latitude": null,
+  "b_destination_longitude": null,
+  "b_start_datetime": "2026-08-09 16:21:26+03:00",
+  "b_custom_comment": "",
+  "b_flight_number": "",
+  "b_terminal": "",
+  "b_passengers_count": "1",
+  "b_luggage_count": "0",
+  "b_placard": "",
+  "b_car_class": "1",
+  "b_offers": null,
+  "b_payment_way": "1",
+  "b_payment_card": null,
+  "b_confirmation_limit": null,
+  "b_confirmation_datetime": null,
+  "b_payment_sum": null,
+  "b_payment_datetime": null,
+  "b_driver_code": "",
+  "b_attempts": null,
+  "b_tips": null,
+  "b_state": "4",
+  "b_rating": null,
+  "b_created": "2026-08-09 13:21:26+03:00",
+  "b_confirm_state": 1,
+  "b_cars_count": "1",
+  "b_cancel_reason": null,
+  "b_cancel_states": null,
+  "b_approved": "2026-08-09 13:23:22+03:00",
+  "b_canceled": null,
+  "b_completed": "2026-08-09 13:24:22+03:00",
+  "b_max_waiting": 180,
+  "b_max_waiting_list": {
+   "1": {
+    "additional": "180",
+    "created": "2026-08-09 13:21:26+03:00"
+   }
+  },
+  "b_estimate_waiting": null,
+  "b_options": {
+   "pricingModel": {
+    "formula": "(base_price+distance*price_per_km+duration*price_per_minute)*time_ratio*car_class_ratio+options_sum+submit_price",
+    "options": {
+     "base_price": 200,
+     "distance": 0,
+     "price_per_km": 10,
+     "duration": 360,
+     "price_per_minute": 5,
+     "time_ratio": 1,
+     "options_sum": 0,
+     "submit_price": 0,
+     "car_class_ratio": 1
+    },
+    "calculationType": "incomplete"
+   },
+   "b_end_datetime": "2026-08-09 22:21:26+03:00",
+   "b_execution": {
+    "schema_version": 1,
+    "estimate": {
+     "started": "2026-08-09 16:21:26+03:00",
+     "ended": "2026-08-09 22:21:26+03:00",
+     "breaks": [
+      {
+       "started": "2026-08-09 18:21:26+03:00",
+       "ended": "2026-08-09 18:51:26+03:00"
+      },
+      {
+       "started": "2026-08-09 20:21:26+03:00",
+       "ended": "2026-08-09 20:51:26+03:00"
+      }
+     ],
+     "total_seconds": 21600,
+     "work_seconds": 18000,
+     "break_seconds": 3600,
+     "billable_work_seconds": 18000
+    }
+   }
+  },
+  "b_contact": null,
+  "b_location_class": "1",
+  "b_distance_estimate": null,
+  "b_price_estimate": null,
+  "b_currency": null,
+  "b_night": null,
+  "kind": "1",
+  "upper": null,
+  "drivers": [
+   {
+    "c_options": {
+     "c_execution": {
+      "schema_version": 1,
+      "mode": null,
+      "actual": {
+       "started": "2026-08-09 13:23:59+03:00",
+       "ended": "2026-08-09 13:24:22+03:00",
+       "breaks": [
+        {
+         "id": "1-1786271055000",
+         "started": "2026-08-09 13:24:15+03:00",
+         "ended": "2026-08-09 13:24:22+03:00",
+         "display": false
+        }
+       ],
+       "total_seconds": 23,
+       "work_seconds": 16,
+       "break_seconds": 7,
+       "billable_work_seconds": 60
+      }
+     }
+    },
+    "c_tips": null,
+    "c_completed": "2026-08-09 13:24:22+03:00",
+    "c_started": "2026-08-09 13:23:59+03:00",
+    "c_arrived": "2026-08-09 13:23:26+03:00",
+    "c_canceled": null,
+    "c_appointed": "2026-08-09 13:23:22+03:00",
+    "c_becomed_candidate": null,
+    "c_rating": "5",
+    "c_cancel_reason": null,
+    "l_datetime": null,
+    "c_longitude": "",
+    "c_latitude": "",
+    "c_state": "6",
+    "c_id": "105",
+    "u_id": "887",
+    "c_arrive_state": 1
+   }
+  ],
+  "b_comments": null,
+  "b_services": null,
+  "countries_list_start": "ma",
+  "countries_list_destination": "ma",
+  "region_start": null,
+  "region_destination": null,
+  "city_start": null,
+  "city_destination": null
+ }
+}

@@ -34,7 +34,7 @@ How to use (example)
 ```ts
 import Engine from '../src/engine';
 
-const engine = new Engine({ redis: { host: '127.0.0.1', port: 6379, password: 'REDACTED-REDIS-PASSWORD' } });
+const engine = new Engine({ redis: { host: '127.0.0.1', port: 6379, password: process.env.REDIS_PASSWORD } });
 await engine.loadTenantSchema('example_tenant');
 
 // get managers

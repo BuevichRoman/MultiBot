@@ -186,6 +186,18 @@ export class ActionExecutor {
             case 'setRate':
                 await OrderActions.handleSetRate(ctx);
                 break;
+            case 'sendBreakStarted':
+                await OrderActions.handleSendBreakStarted(ctx);
+                break;
+            case 'sendBreakEnded':
+                await OrderActions.handleSendBreakEnded(ctx);
+                break;
+            case 'sendPlannedBreaksPrompt':
+                await OrderActions.handleSendPlannedBreaksPrompt(ctx);
+                break;
+            case 'sendPlannedBreaksError':
+                await OrderActions.handleSendPlannedBreaksError(ctx);
+                break;
             case 'setReview':
                 await OrderActions.handleSetReview(ctx);
                 break;
@@ -218,6 +230,9 @@ export class ActionExecutor {
                 break;
             case 'sendOrderCompleted':
                 await OrderActions.handleSendOrderCompleted(ctx);
+                // Итог по перерывам идёт следом за сообщением о завершении,
+                // порядок важен: иначе итог приходит раньше самого события
+                await OrderActions.handleSendBreaksFinal(ctx);
                 break;
             case 'sendSettingsMenu':
                 await SettingsActions.handleSendSettingsMenu(ctx);

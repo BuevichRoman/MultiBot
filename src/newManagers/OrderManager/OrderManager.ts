@@ -226,6 +226,8 @@ export class OrderManager {
           await this.emit(entry, event);
         }
 
+        await this.emitBreakChange(entry, data);
+
         if (TERMINAL_EVENTS.has(event)) {
           this.activeOrders.delete(orderId);
         }
@@ -237,14 +239,80 @@ export class OrderManager {
     }
   }
 
-  private async emit(entry: OrderWatchEntry, event: OrderStatusEvent): Promise<void> {
+  /**
+   * События начала и окончания перерыва (ТЗ п. 10).
+   *
+   * Ведутся отдельно от основной машины состояний: во время перерыва заказ
+   * остаётся выполняющимся, поэтому deriveEvent всё это время возвращает
+   * order_status_driver_started и по нему перерыв не отследить.
+   *
+   * Смотрим на состав actual.breaks[], а не на один b_execution.mode:
+   * перерыв, целиком уложившийся между двумя опросами, режимом не виден —
+   * на обоих опросах он тот же самый.
+   */
+  private async emitBreakChange(entry: OrderWatchEntry, data: RawOrderData): Promise<void> {
+    const mode = data.b_execution?.mode ?? null;
+    const breaks = data.b_execution?.actual?.breaks ?? [];
+    const firstPoll = entry.lastExecutionMode === undefined;
+    entry.lastExecutionMode = mode;
+
+    const known = entry.breakStates ?? (entry.breakStates = {});
+
+    // Первый опрос: заказ мог попасть под наблюдение уже с перерывами,
+    // уведомлять о них задним числом не о чем
+    if (firstPoll) {
+      for (const item of breaks) {
+        known[item.id] = item.ended == null ? 'started' : 'ended';
+      }
+      return;
+    }
+
+    for (const item of breaks) {
+      const active = item.ended == null;
+
+      if (known[item.id] === undefined) {
+        // Перерыв, пропущенный целиком: о слишком коротком не сообщаем,
+        // его и в списках нет (ТЗ п. 20), но в суммах он остаётся
+        if (!active && item.display === false) {
+          known[item.id] = 'ended';
+          continue;
+        }
+        known[item.id] = 'started';
+        await this.emit(entry, ORDER_STATUS_EVENTS.BREAK_STARTED, {
+          breakStartedAt: item.started,
+        });
+      }
+
+      if (active || known[item.id] === 'ended') continue;
+
+      known[item.id] = 'ended';
+
+      // Об окончании сообщаем, только если заказ продолжается.
+      // При завершении заказа во время перерыва приложение няни закрывает
+      // интервал само и снимает режим (ТЗ п. 17), а заказчик получает
+      // итоговое уведомление о завершении — отдельное «перерыв окончен»
+      // после него было бы лишним
+      if (mode === null) continue;
+
+      await this.emit(entry, ORDER_STATUS_EVENTS.BREAK_ENDED, {
+        breakEndedAt: item.ended,
+        breakSeconds: data.b_execution?.actual?.break_seconds,
+      });
+    }
+  }
+
+  private async emit(
+    entry: OrderWatchEntry,
+    event: OrderStatusEvent,
+    extra?: Record<string, unknown>,
+  ): Promise<void> {
     const payload: SystemEventPayload = {
       tenantId: this.tenantId,
       botId: entry.botId,
       chatId: entry.chatId,
       userId: entry.userId,
       event,
-      payload: { orderId: entry.orderId },
+      payload: { orderId: entry.orderId, ...extra },
     };
     await this.config.onSystemEvent(payload);
   }

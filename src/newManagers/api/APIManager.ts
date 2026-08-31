@@ -14,6 +14,40 @@ import {CacheVersion} from "./types/cacheVersion";
 import fs from "fs";
 import path from "path";
 
+/**
+ * Разбор заказа из ответа `drive/get`.
+ *
+ * Вынесено из метода отдельно, чтобы стык с формой ответа боевого API можно
+ * было проверить тестом без сети: именно здесь пряталась ошибка, когда бот
+ * искал перерывы не в том месте.
+ *
+ * План и факт хранятся раздельно. План кладёт заказчик при создании заказа
+ * в `b_options.b_execution`, факт пишет няня в своём `c_options.c_execution`:
+ * метод `edit` разрешает исполнителю только `c_options`, `b_options` ему
+ * недоступен.
+ *
+ * `server_time` боевой API не отдаёт — поле остаётся на случай, если ответ
+ * его всё-таки содержит.
+ */
+export function mapOrderState(
+    booking: any,
+    serverTime?: string,
+): import('../OrderManager/types').RawOrderData {
+    const drivers: any[] = booking.drivers ?? [];
+    const execution = drivers
+        .map(item => item?.c_options?.c_execution)
+        .find(Boolean);
+
+    return {
+        b_state: Number(booking.b_state),
+        b_start_datetime: booking.b_start_datetime,
+        b_max_waiting_list: booking.b_max_waiting_list,
+        drivers: booking.drivers,
+        b_execution: execution,
+        server_time: serverTime ?? booking.server_time,
+    };
+}
+
 interface AdminCredentials {
     login: string;
     password: string;
@@ -540,12 +574,7 @@ class APIManager {
                 this.logger.warn(`${this.tag} [getOrderState] no booking for orderId`, { orderId });
                 return null;
             }
-            return {
-                b_state: Number(booking.b_state),
-                b_start_datetime: booking.b_start_datetime,
-                b_max_waiting_list: booking.b_max_waiting_list,
-                drivers: booking.drivers,
-            };
+            return mapOrderState(booking, response.data?.data?.server_time);
         } catch (e: any) {
             this.logger.warn(`${this.tag} [getOrderState] error`, { orderId, error: e?.message });
             return null;
@@ -770,6 +799,8 @@ class APIManager {
             childrenCount?: number;
             additionalOptions?: number[];
             preferredDriversList?: string[];
+            /** Плановые перерывы парами `ЧЧ:ММ` (ТЗ-001 п. 5) */
+            plannedBreaks?: Array<{ started: string; ended: string }>;
         },
         idField: Record<string, string>,
     ): Promise<{ orderId: number } | { error: string }> {
@@ -818,6 +849,40 @@ class APIManager {
         };
         if (orderDraft.preferredDriversList?.length) {
             data.b_only_offer = 1;
+        }
+
+        // Плановое время окончания: без него не с чем сопоставлять плановые
+        // перерывы, а duration в формуле цены уходит нулём. hoursCount
+        // собирается у заказчика, но раньше никуда не передавался.
+        // Кладём в b_options: своего поля под длительность в схеме заказа нет
+        const plannedStart = orderDraft.when ?? new Date();
+        const hours = Number(orderDraft.hoursCount);
+        if (Number.isFinite(hours) && hours > 0) {
+            data.b_options.b_end_datetime = formatDateAPI(
+                new Date(plannedStart.getTime() + hours * 3600_000),
+            );
+        }
+
+        // Плановые перерывы приходят парами ЧЧ:ММ — привязываем их к дате
+        // начала заказа. Интервал, попавший раньше начала, относим к
+        // следующим суткам: заказ может идти через полночь
+        if (orderDraft.plannedBreaks?.length) {
+            const base = orderDraft.when ?? new Date();
+            const atOrderDate = (time: string) => {
+                const [hours, minutes] = time.split(':').map(Number);
+                const value = new Date(base);
+                value.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+                if (value.getTime() < base.getTime()) value.setDate(value.getDate() + 1);
+                return value;
+            };
+            data.b_options.b_execution = {
+                estimate: {
+                    breaks: orderDraft.plannedBreaks.map((item) => ({
+                        started: formatDateAPI(atOrderDate(item.started)),
+                        ended: formatDateAPI(atOrderDate(item.ended)),
+                    })),
+                },
+            };
         }
 
         this.logger.info(`${this.tag} [createDrive] start`, {

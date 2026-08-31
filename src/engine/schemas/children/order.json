@@ -24,6 +24,12 @@
       "type": "sendL10n",
       "params": { "key": "wab_driverCanceled", "lang": { "var": "user.lang" } }
     },
+    "sendOrderBreakStarted": {
+      "type": "sendBreakStarted"
+    },
+    "sendOrderBreakEnded": {
+      "type": "sendBreakEnded"
+    },
     "sendOrderCompleted": {
       "type": "sendOrderCompleted"
     },
@@ -169,6 +175,25 @@
       },
       "transitions": [
         { "event": "cancel_reason_request", "to": "order.cancelReason", "actions": ["sendCancelReasonList"] },
+        { "event": "order_status_break_started", "to": "order.onBreak", "actions": ["sendOrderBreakStarted"] },
+        { "event": "order_status_completed", "to": "order.completed", "actions": ["sendOrderCompleted"] },
+        { "event": "order_status_driver_canceled", "to": "order.canceled", "actions": ["sendOrderDriverCanceled"] },
+        { "event": "order_status_canceled", "to": "order.canceled", "actions": ["sendOrderCanceled"] }
+      ]
+    },
+
+    "onBreak": {
+      "id": "order.onBreak",
+      "description": "Няня на перерыве. Заказ продолжает выполняться, оплачиваемое время не начисляется (ТЗ-001 п. 7).",
+      "entryActions": [],
+      "validation": {
+        "type": "mapping",
+        "mapping": { "0": { "event": "cancel_reason_request" } },
+        "errorEvent": "message"
+      },
+      "transitions": [
+        { "event": "cancel_reason_request", "to": "order.cancelReason", "actions": ["sendCancelReasonList"] },
+        { "event": "order_status_break_ended", "to": "order.driverStarted", "actions": ["sendOrderBreakEnded"] },
         { "event": "order_status_completed", "to": "order.completed", "actions": ["sendOrderCompleted"] },
         { "event": "order_status_driver_canceled", "to": "order.canceled", "actions": ["sendOrderDriverCanceled"] },
         { "event": "order_status_canceled", "to": "order.canceled", "actions": ["sendOrderCanceled"] }

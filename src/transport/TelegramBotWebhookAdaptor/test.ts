@@ -8,7 +8,7 @@ const handler = async (msg: AnyMessage) => {
 
 const adaptor = new TelegramBotWebhookAdaptor(
   'test_bot',
-  process.env.TG_TOKEN || 'REDACTED-TELEGRAM-TOKEN',
+  process.env.TG_TOKEN ?? '',
   { platform: 'telegram', botId: 'test_bot', webhookUrl: process.env.WEBHOOK_BASE || 'https://example.com', port: Number(process.env.WEBHOOK_PORT || 3000) },
   async () => console.log('start'),
   async () => console.log('stop'),

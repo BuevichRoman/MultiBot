@@ -13,7 +13,7 @@ const config = {
     telegram: {
         botId: "my_telegram_bot",
         // 🔥 ВАЖНО: Получите свой токен у @BotFather в Telegram
-        token: "REDACTED-TELEGRAM-TOKEN", // ЗАМЕНИТЕ НА СВОЙ!
+        token: process.env.TG_TOKEN ?? "", // токен из окружения, не в коде
     }
 };
 

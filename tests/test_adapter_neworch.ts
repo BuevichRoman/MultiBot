@@ -2,6 +2,11 @@
 
 import path from 'path';
 import assert from 'assert';
+import dotenv from 'dotenv';
+
+// Настройки прогона держим отдельно от .env приложения: у теста свой адрес
+// API, свой Redis и свой бот. Пример значений — tests/.env.example
+dotenv.config({ path: path.join(__dirname, '.env') });
 import {Orchestrator} from '../src/newManagers/orchestrator/Orchestrator'; // новый
 import type { RootConfig } from '../src/newManagers/orchestrator/types'; // только тип
 import Engine from '../src/engine';
@@ -17,14 +22,45 @@ import {
 } from '../src/engine/children/order/orderConfirmation';
 
 async function delay(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
+/**
+ * Обязательная переменная окружения. Пустое значение допустимо — например,
+ * Redis без пароля, — а вот отсутствие переменной означает, что прогон
+ * настроен не полностью, и лучше упасть сразу с внятным сообщением.
+ *
+ * Доступы в коде не держим: репозиторий публичный. Пример — tests/.env.example
+ */
+function requireEnv(name: string): string {
+    const value = process.env[name];
+    if (value === undefined) {
+        throw new Error(
+            `Не задана переменная окружения ${name}. ` +
+            `Список нужных переменных — в tests/.env.example`,
+        );
+    }
+    return value;
+}
 process.env.DRIVER_SEARCH_LOG = '1';
 process.env.WHATSAPP_DEBUG = '1';
 async function runTest() {
+    // Транспорты включаются по отдельности и по умолчанию выключены: сценарии
+    // гоняются через TestAdapter, которому ни Telegram, ни WhatsApp не нужны.
+    // Раньше был один флаг на оба, и включить только Telegram было нельзя —
+    // вместе с ним поднимался WhatsApp Web и просил сканировать QR
+    const withTelegram = process.env.MULTIBOT_TELEGRAM === '1';
+    const withWhatsapp = process.env.MULTIBOT_WHATSAPP === '1';
+
     const config: RootConfig = {
         api: {
             'default-api': {
-                url: 'https://ibronevik.ru/taxi/c/children/api/v1/',
-                adminCredentials: { login: 'redacted@example.invalid', password: 'REDACTED-ADMIN-PASSWORD', type: 'e-mail' },
+                // Адрес и доступы берутся из окружения: держать их в коде нельзя,
+                // репозиторий публичный. Пример — tests/.env.example
+                url: requireEnv('MULTIBOT_API_URL'),
+                adminCredentials: {
+                    login: requireEnv('MULTIBOT_ADMIN_LOGIN'),
+                    password: requireEnv('MULTIBOT_ADMIN_PASSWORD'),
+                    type: 'e-mail',
+                },
                 adminAuthFile: 'data/default-api.json'
             }
         },
@@ -37,14 +73,17 @@ async function runTest() {
                 transport: { type: 'test' },
                 core: { name: 'children' }
             },
+            ...(withTelegram ? {
             'test-bot': {
                 api: 'default-api',
                 transport: {
                     type: 'telegram-bot-polling',
-                    token: 'REDACTED-TELEGRAM-TOKEN'
+                    token: requireEnv('MULTIBOT_TELEGRAM_TOKEN')
                 },
                 core: { name: 'children' }
             },
+            } : {}),
+            ...(withWhatsapp ? {
             /** WhatsApp Web: сессия в отдельной папке; init идёт в фоне в Orchestrator.start() */
             'test-whatsapp-bot': {
                 api: 'default-api',
@@ -54,15 +93,25 @@ async function runTest() {
                 },
                 core: { name: 'children' }
             },
+            } : {}),
         }
     };
 
     const logger = new MegaLogger({ serviceName: 'TestBOTA' });
-    const engine = new Engine({ redis: { host: '127.0.0.1', port: 6379, password: 'REDACTED-REDIS-PASSWORD' } });
+
+    // Позволяет держать отдельный Redis для прогона против мока.
+    // Пароль — из окружения; пустая строка означает Redis без пароля
+    const redisOptions = {
+        host: process.env.MULTIBOT_REDIS_HOST || '127.0.0.1',
+        port: Number(process.env.MULTIBOT_REDIS_PORT || 6379),
+        password: requireEnv('MULTIBOT_REDIS_PASSWORD'),
+    };
+
+    const engine = new Engine({ redis: redisOptions });
 
     // Очистка Redis
     const IORedis = require('ioredis');
-    const redis = new IORedis({ host: '127.0.0.1', port: 6379, password: 'REDACTED-REDIS-PASSWORD' });
+    const redis = new IORedis(redisOptions);
     try {
         const keys = await redis.keys('engine:*:state:*');
         const keys2 = await redis.keys('engine:*:stateData:*');
@@ -96,9 +145,17 @@ async function runTest() {
     // Запускаем оркестратор (Telegram / Test / WhatsApp — init в фоне где применимо)
     await orchestrator.start();
 
-    const waAdapter = orchestrator.getAdapter('test-whatsapp-bot');
-    assert(waAdapter, 'WhatsApp adapter should be created');
-    logger.info(`[test] WhatsApp adapter started: ${(waAdapter as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+    if (withTelegram) {
+        const tgAdapter = orchestrator.getAdapter('test-bot');
+        assert(tgAdapter, 'Telegram adapter should be created');
+        logger.info(`[test] Telegram adapter started: ${(tgAdapter as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+    }
+
+    if (withWhatsapp) {
+        const waAdapter = orchestrator.getAdapter('test-whatsapp-bot');
+        assert(waAdapter, 'WhatsApp adapter should be created');
+        logger.info(`[test] WhatsApp adapter started: ${(waAdapter as { constructor?: { name?: string } })?.constructor?.name ?? 'unknown'}`);
+    }
 
     // Получаем адаптер и API менеджер для тестов
     const adapter = orchestrator.getAdapter('test-adapter-bot') as any;
@@ -112,10 +169,10 @@ async function runTest() {
         await apiMgr.api_data_manager.load();
     }
 
-    //await run_tests_registration(orchestrator,adapter,apiMgr,logger);
-    //await run_tests_main(orchestrator,adapter,apiMgr,logger)
+    await run_tests_registration(orchestrator,adapter,apiMgr,logger);
+    await run_tests_main(orchestrator,adapter,apiMgr,logger)
 
-
+    process.exit(0);
 }
 
 runTest().catch(err => {
@@ -555,6 +612,25 @@ async function run_tests_main(orchestrator:Orchestrator,
         });
         await waitForMessages(beforeCount + 1);
 
+        // ТЗ-001 п. 5: между вводом времени и подтверждением появился шаг
+        // плановых перерывов. Здесь его пропускаем — отдельно он проверяется
+        // в tests/test_planned_breaks.js
+        assert.ok(
+            sentEvents[beforeCount]?.finalText,
+            `❌ ${stepName}: ожидалась подсказка о плановых перерывах`
+        );
+        const skipCount = sentEvents.length;
+        logger.debug('📤 Sending: "0" (пропуск плановых перерывов)');
+
+        // Ключ location не передаём даже пустым: Orchestrator проверяет его
+        // через `'location' in msg`, и на undefined чтение широты падает
+        const { location: _skip, ...msgWithoutLocation } = msg;
+        adapter.receiveMessage({ ...msgWithoutLocation, id: (Date.now() + 77).toString(), text: '0' })
+            .catch((e: string) => {
+                if (adapter.handlers?.error) adapter.handlers.error(e);
+            });
+        await waitForMessages(skipCount + 1);
+
         let isTestMode = false;
         try {
             const uid = String(msg.from?.id ?? msg.chatId ?? '');
@@ -599,9 +675,9 @@ async function run_tests_main(orchestrator:Orchestrator,
             isTestMode
         );
         assert.strictEqual(
-            sentEvents[beforeCount]?.finalText,
+            sentEvents[skipCount]?.finalText,
             expected,
-            `❌ ${stepName}: expected order confirm, got "${sentEvents[beforeCount]?.finalText}"`
+            `❌ ${stepName}: expected order confirm, got "${sentEvents[skipCount]?.finalText}"`
         );
         logger.info(`✅ ${stepName} PASSED`);
     }
@@ -667,7 +743,10 @@ async function run_tests_main(orchestrator:Orchestrator,
     await adapter.receiveMessage(msg1);
     await waitForMessages(1);
 
-    await expectMessage(0, localizationNames.commandNotFound, '1');
+    // По схеме main.start команда /start разрешена и выводит главное меню.
+    // Раньше здесь ожидалось «команда не распознана» — это проходило только
+    // на состоянии, оставшемся в Redis от прошлого прогона
+    await expectMessage(0, localizationNames.defaultPrompt, '1');
 
 
     sentEvents.length = 0;
@@ -751,13 +830,24 @@ async function run_tests_main(orchestrator:Orchestrator,
         }
     );
 
-    // main.confirm: "2" -> отмена
+    // main.confirm: "2" не предусмотрено — текст подтверждения предлагает
+    // только "1" и "0", поэтому лишний ответ должен отбиваться, а не
+    // проглатываться молча
     sentEvents.length = 0;
     await sendAndExpect(
         { ...msg1, id: (Date.now()+1).toString(), text: '2' },
+        localizationNames.commandNotFound,
+        '1',
+        'Confirm: "2" -> command not found'
+    );
+
+    // main.confirm: "0" -> отмена
+    sentEvents.length = 0;
+    await sendAndExpect(
+        { ...msg1, id: (Date.now()+2).toString(), text: '0' },
         localizationNames.orderCanceled,
         '1',
-        'Confirm cancel (2) -> main.start'
+        'Confirm cancel (0) -> main.start'
     );
     // После отмены должно прийти sendDefaultMenu
     await expectMessage(1, localizationNames.defaultPrompt, '1');
