@@ -11,6 +11,7 @@
         "local-test": "cross-env NODE_ENV=test ts-node-dev tests/local-test.ts"
     },
     "dependencies": {
+        "@sentry/node": "^10.72.0",
         "axios": "^1.7.7",
         "canvas": "^3.1.0",
         "cross-env": "^7.0.3",

@@ -15,10 +15,14 @@ import { Orchestrator } from './newManagers/orchestrator/Orchestrator';
 import defaultLogger, { MegaLogger, registerRootLogger } from './addons/logger';
 import { makeChildrenHandler } from './engine/handlers/children';
 import { loadAppConfig, resolveFromRepo } from './config/loadAppConfig';
+import { initMonitoring, captureError, flushMonitoring } from './addons/monitoring';
 
 const TENANT_ID = 'children';
 
 async function main(): Promise<void> {
+    // До всего остального: падения самого запуска тоже должны быть видны
+    initMonitoring();
+
     const cwd = process.cwd();
     const appConfigPath = process.env.APP_CONFIG || path.join(cwd, 'config', 'app.json');
 
@@ -85,6 +89,7 @@ async function main(): Promise<void> {
     const shutdown = async (signal: string) => {
         logger.warn(`[bootstrap] Shutdown ${signal}`);
         await orchestrator.stop(signal);
+        await flushMonitoring();
         process.exit(0);
     };
 
@@ -96,9 +101,11 @@ async function main(): Promise<void> {
     });
 }
 
-main().catch((err: unknown) => {
+main().catch(async (err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
     const stack = err instanceof Error ? err.stack : undefined;
     defaultLogger.error('[bootstrap] Fatal', { message, stack });
+    captureError(err, { scope: 'bootstrap' });
+    await flushMonitoring();
     process.exit(1);
 });
