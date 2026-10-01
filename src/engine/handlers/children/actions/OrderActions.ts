@@ -90,20 +90,14 @@ export async function handleSendDriverSelectionError(ctx: ActionContext): Promis
     }
 }
 
-export async function handleCreateOrder(ctx: ActionContext): Promise<void> {
-    const root = await ctx.getData();
-    const data = getOrderInputSlice(root);
+/** Черновик заказа для APIManager.createDrive; null — если нет координат */
+function buildOrderDraft(data: Record<string, any>) {
     const lat = data.latitude;
     const lng = data.longitude;
-    if (lat == null || lng == null) {
-        const errPhrase = await ctx.getLocalizedText('wab_errorWhenCreatingOrder', String(root?.user?.lang ?? '1'));
-        await ctx.sendMessage(errPhrase);
-        return;
-    }
-
+    if (lat == null || lng == null) return null;
     const from = { latitude: String(lat), longitude: String(lng) };
     const when = data.when;
-    const orderDraft = {
+    return {
         from,
         to: from,
         when: when instanceof Date ? when : when ? new Date(when) : null,
@@ -113,6 +107,57 @@ export async function handleCreateOrder(ctx: ActionContext): Promise<void> {
         preferredDriversList: data.preferredDriversList ?? [],
         plannedBreaks: data.plannedBreaks ?? [],
     };
+}
+
+/** Причина отмены заказа, для которого не нашлось ни одной няни (видна в админке) */
+export const NO_NANNIES_CANCEL_REASON = 'Няня не найдена';
+
+/**
+ * Нянь не нашли: заказ всё равно записываем и сразу отменяем с причиной,
+ * чтобы отказ остался в базе и был виден в админке. Клиенту сообщение уже
+ * отправил DriverSearchManager, наблюдение за заказом не ставим.
+ */
+export async function handleRecordUnservedOrder(ctx: ActionContext): Promise<void> {
+    const input = getOrderInputSlice(await ctx.getData());
+    // Прерванный поиск (search_cancelled, no_coords…) — это не отказ бизнеса
+    if (input.noDriversReason !== 'no_drivers') return;
+    const draft = buildOrderDraft(input);
+    if (!draft || !ctx.apiManager?.createDrive || !ctx.apiManager?.cancelOrder) return;
+
+    const idField = ctx.getIdField();
+    // Офферы няням не рассылаем: заказ отменяется сразу
+    const result = await ctx.apiManager.createDrive({ ...draft, preferredDriversList: [] }, idField);
+    if ('error' in result) {
+        orderActLog.warn('[handleRecordUnservedOrder] createDrive failed', { error: result.error });
+        return;
+    }
+
+    const orderId = String(result.orderId);
+    const cancelled = await ctx.apiManager.cancelOrder(orderId, NO_NANNIES_CANCEL_REASON, idField);
+    if (!cancelled) {
+        // Заказ остался в поиске — нужен человек
+        captureError(new Error('unserved order was not cancelled'), { tenantId: ctx.tenantId, orderId, scope: 'record-unserved-order' });
+        return;
+    }
+
+    logBusinessEvent('order.no_nannies', {
+        tenantId: ctx.tenantId,
+        userId: String(ctx.userId),
+        chatId: String(ctx.chatId),
+        botId: ctx.botId,
+        orderId: result.orderId,
+        ...idField,
+    });
+}
+
+export async function handleCreateOrder(ctx: ActionContext): Promise<void> {
+    const root = await ctx.getData();
+    const orderDraft = buildOrderDraft(getOrderInputSlice(root));
+    if (!orderDraft) {
+        const errPhrase = await ctx.getLocalizedText('wab_errorWhenCreatingOrder', String(root?.user?.lang ?? '1'));
+        await ctx.sendMessage(errPhrase);
+        return;
+    }
 
     await ctx.mergeData({ orderDraft });
 

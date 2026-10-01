@@ -187,6 +187,15 @@ export class MainHandler extends BaseHandler {
                     botId,
                 );
             }
+            if (event === 'no_drivers' && ctx.payload) {
+                const p = ctx.payload as Record<string, unknown>;
+                await this.fsm.mergeData(
+                    this.tenantId,
+                    userIdStr,
+                    { order: { input: { noDriversReason: p.reason } } },
+                    botId,
+                );
+            }
         } else {
             const determined = await this.determineEvent(
                 executor,
