@@ -80,11 +80,16 @@ export async function getDriversForCityNight(
     return response.data;
 }
 
-export async function isNightTime(lat: number, lng: number): Promise<boolean> {
+/**
+ * Ночь (22:00–06:00) по месту заказа. Считается по времени заказа `at`;
+ * без него (заказ «сейчас») или с битой датой — по текущему времени.
+ */
+export async function isNightTime(lat: number, lng: number, at?: Date | null): Promise<boolean> {
     try {
         const timezones = geoTz.find(lat, lng);
         if (!timezones.length) return false;
-        const localTime = DateTime.now().setZone(timezones[0]);
+        const base = at && !isNaN(at.getTime()) ? DateTime.fromJSDate(at) : DateTime.now();
+        const localTime = base.setZone(timezones[0]);
         const currentHour = localTime.hour;
         return currentHour >= 22 || currentHour < 6;
     } catch (error) {

@@ -765,13 +765,13 @@ class APIManager {
      * Получить список водителей по координатам (для DriverSearchManager).
      * Использует query/template/1 (города) и 2 или 3 (водители).
      */
-    async getDrivers(lat: number, lng: number, userId?: string): Promise<Array<{ id_user: string; phone?: string; name?: string; family?: string; distance?: string; json?: string; [key: string]: unknown }>> {
+    async getDrivers(lat: number, lng: number, userId?: string, when?: Date | null): Promise<Array<{ id_user: string; phone?: string; name?: string; family?: string; distance?: string; json?: string; [key: string]: unknown }>> {
         const auth = { token: this.adminAuth.token, hash: this.adminAuth.u_hash } as { token: string; hash: string };
         const city = await getCitiesByDriveStartLoc(auth, this.url, { latitude: lat, longitude: lng });
         if (!city?.data?.length) return [];
         const cityIds = city.data.map((c: any) => c.id_city);
         let drivers: { data?: any[] };
-        if (await isNightTime(lat, lng)) {
+        if (await isNightTime(lat, lng, when)) {
             drivers = await getDriversForCityNight(auth, this.url, cityIds, userId || '');
         } else {
             drivers = await getDriversForCity(auth, this.url, cityIds);

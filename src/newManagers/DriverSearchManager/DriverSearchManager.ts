@@ -144,7 +144,7 @@ export class DriverSearchManager {
       : Math.floor((Date.now() - (when?.getTime() ?? Date.now()) + maxWaiting) / interval);
 
     try {
-      const drivers = await this.apiManager.getDrivers(Number(lat), Number(lng), (rawData as { user?: { id?: string } })?.user?.id);
+      const drivers = await this.apiManager.getDrivers(Number(lat), Number(lng), (rawData as { user?: { id?: string } })?.user?.id, when);
       this.log('poll -> getDrivers', { lat, lng, count: drivers?.length ?? 0 });
       if (drivers && drivers.length > 0) {
         this.log('poll -> drivers_found', { count: drivers.length });

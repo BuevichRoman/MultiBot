@@ -41,7 +41,7 @@ export interface DriverSearchSystemPayload {
 
 /** Минимальный интерфейс API для DriverSearchManager (реализует APIManager). */
 export interface IAPIManagerForDriverSearch {
-  getDrivers(lat: number, lng: number, userId?: string): Promise<DriverItem[]>;
+  getDrivers(lat: number, lng: number, userId?: string, when?: Date | null): Promise<DriverItem[]>;
 }
 
 /** Минимальный интерфейс FSM для DriverSearchManager (реализует FSMManager). */
