@@ -180,6 +180,9 @@ export class ActionExecutor {
             case 'createOrder':
                 await OrderActions.handleCreateOrder(ctx);
                 break;
+            case 'recordUnservedOrder':
+                await OrderActions.handleRecordUnservedOrder(ctx);
+                break;
             case 'sendDriverSelectionError':
                 await OrderActions.handleSendDriverSelectionError(ctx);
                 break;

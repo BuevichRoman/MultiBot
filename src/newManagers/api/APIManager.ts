@@ -686,8 +686,9 @@ class APIManager {
     /**
      * Отменить заказ через drive/get/:id + action set_cancel_state.
      * @param idField - { u_a_tg } | { u_a_wa } | { chatId } для авторизации
+     * @returns true, если платформа подтвердила отмену
      */
-    async cancelOrder(orderId: string, reason: string, idField?: Record<string, string>): Promise<void> {
+    async cancelOrder(orderId: string, reason: string, idField?: Record<string, string>): Promise<boolean> {
         const { createForm } = await import('./utils/general');
         const axios = (await import('axios')).default;
         const { postHeaders } = await import('./utils/general');
@@ -703,9 +704,12 @@ class APIManager {
             );
             if (response.status !== 200 || response.data?.status !== 'success') {
                 this.logger.warn(`${this.tag} [cancelOrder] failed`, { orderId, status: response.status });
+                return false;
             }
+            return true;
         } catch (e: any) {
             this.logger.warn(`${this.tag} [cancelOrder] error`, { orderId, error: e?.message });
+            return false;
         }
     }
 

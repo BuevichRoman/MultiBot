@@ -161,6 +161,9 @@
     "createOrder": {
       "type": "createOrder"
     },
+    "recordUnservedOrder": {
+      "type": "recordUnservedOrder"
+    },
     "sendDriverSelectionError": {
       "type": "sendDriverSelectionError"
     },
@@ -714,6 +717,7 @@
           "event": "no_drivers",
           "to": "main.start",
           "actions": [
+            "recordUnservedOrder",
             "clearOrderData",
             "sendDefaultMenu"
           ]
