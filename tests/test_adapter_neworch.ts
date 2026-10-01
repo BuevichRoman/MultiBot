@@ -610,25 +610,10 @@ async function run_tests_main(orchestrator:Orchestrator,
         adapter.receiveMessage(msg).catch((e: string) => {
             if (adapter.handlers?.error) adapter.handlers.error(e);
         });
-        await waitForMessages(beforeCount + 1);
-
-        // ТЗ-001 п. 5: между вводом времени и подтверждением появился шаг
-        // плановых перерывов. Здесь его пропускаем — отдельно он проверяется
-        // в tests/test_planned_breaks.js
-        assert.ok(
-            sentEvents[beforeCount]?.finalText,
-            `❌ ${stepName}: ожидалась подсказка о плановых перерывах`
-        );
-        const skipCount = sentEvents.length;
-        logger.debug('📤 Sending: "0" (пропуск плановых перерывов)');
-
-        // Ключ location не передаём даже пустым: Orchestrator проверяет его
-        // через `'location' in msg`, и на undefined чтение широты падает
-        const { location: _skip, ...msgWithoutLocation } = msg;
-        adapter.receiveMessage({ ...msgWithoutLocation, id: (Date.now() + 77).toString(), text: '0' })
-            .catch((e: string) => {
-                if (adapter.handlers?.error) adapter.handlers.error(e);
-            });
+        // Шаг плановых перерывов (ТЗ-001 п. 5) с 01.10.2026 скрыт: после
+        // времени сразу приходит подтверждение. Когда шаг вернут, сюда
+        // возвращается пропуск ответом «0» (см. историю файла)
+        const skipCount = beforeCount;
         await waitForMessages(skipCount + 1);
 
         let isTestMode = false;

@@ -627,9 +627,9 @@
       "transitions": [
         {
           "event": "ok",
-          "to": "main.plannedBreaks",
+          "to": "main.confirm",
           "actions": [
-            "sendPlannedBreaksPrompt"
+            "sendCollectionOrderConfirm"
           ]
         },
         {
@@ -643,7 +643,7 @@
     },
     "plannedBreaks": {
       "id": "main.plannedBreaks",
-      "description": "Плановые перерывы при создании заказа (ТЗ-001 п. 5). Шаг необязательный: 0 — перерывов не планируется.",
+      "description": "Плановые перерывы при создании заказа (ТЗ-001 п. 5). Шаг необязательный: 0 — перерывов не планируется. С 01.10.2026 временно скрыт: when.ok ведёт сразу в main.confirm. Вернуть — when.ok → main.plannedBreaks с действием sendPlannedBreaksPrompt.",
       "transitions": [
         {
           "event": "ok",
