@@ -9,6 +9,7 @@ import { TelegramBotPollingAdaptor, TelegramBotWebhookAdaptor, WhatsappWebPollin
 import { OrderManager } from '../OrderManager';
 import type { SystemEventPayload, RawOrderData } from '../OrderManager';
 import { DriverSearchManager } from '../DriverSearchManager';
+import { runWithRetry, TELEGRAM_RETRY_DELAYS_MS } from './retry';
 import type { DriverSearchSystemPayload } from '../DriverSearchManager';
 
 export interface MessageContext {
@@ -51,6 +52,7 @@ class Orchestrator {
     private engine?: any;
     private skipApiLogin: boolean;
     private configSource: any;
+    private stopping = false;
 
     constructor(config: OrchestratorConfig) {
         this.configSource = config.configSource;
@@ -118,6 +120,7 @@ class Orchestrator {
     }
 
     async start() {
+        this.stopping = false;
         this.log('info', 'Starting bots...');
 
         // Убеждаемся что конфиг загружен и API менеджеры созданы
@@ -331,15 +334,15 @@ class Orchestrator {
 
         if (typeof (adapter as any).start === 'function') (adapter as any).start().catch(() => {});
 
-        // Telegram polling: запускаем init в фоне, чтобы Orchestrator.start() не блокировал поток
+        // Telegram polling: запускаем init в фоне, чтобы Orchestrator.start() не блокировал поток.
+        // При ошибке (таймаут до api.telegram.org, 409 при рестарте) — повтор, иначе бот молчит до ручного рестарта.
         if (adapter instanceof TelegramBotPollingAdaptor) {
-            (async () => {
-                try {
-                    await adapter.init();
-                } catch (e) {
-                    this.log('error', `Telegram adapter init failed for bot ${botId}`, e);
-                }
-            })();
+            void runWithRetry(() => adapter.init(), {
+                delaysMs: TELEGRAM_RETRY_DELAYS_MS,
+                shouldStop: () => this.stopping,
+                onError: (e, attempt, nextDelayMs) =>
+                    this.log('error', `Telegram adapter init failed for bot ${botId} (attempt ${attempt}), retry in ${nextDelayMs / 1000}s`, e),
+            });
         }
         // WhatsApp Web: client.initialize() в фоне (QR / сессия в sessionDir)
         if (adapter instanceof WhatsappWebPollingAdaptor) {
@@ -408,6 +411,7 @@ class Orchestrator {
     }
 
     async stop(reason?: string) {
+        this.stopping = true;
         this.log('warn', `Stopping: ${reason}`);
         for (const [, mgr] of this.apiManagers) {
             mgr.stopApiDataVersionWatch();
