@@ -7,6 +7,7 @@ import type { PriceModel, PriceCalculationParams } from '../../types/OrderPrice'
 import { calculatePrice, formatPriceFormula } from './priceCalculation';
 import { formatString } from '../../utils/formatString';
 import { getTaggedLogger } from '../../../addons/logger';
+import { orderTimeZone } from './orderTimeZone';
 
 const orderConfirmLog = getTaggedLogger('orderConfirmation');
 
@@ -15,12 +16,11 @@ function makeCurrencySymbol(price: string, currency: string): string {
     return price + ' ' + currency;
 }
 
-function formatDateHumanUtc(date: Date | null, nowLabel: string): string {
+/** Время заказа так, как его ввёл пользователь: в поясе места заказа. */
+function formatDateHuman(date: Date | null, nowLabel: string, timeZone: string): string {
     if (date === null) return nowLabel;
-    return date.toLocaleDateString('en-GB', { month: 'numeric', day: 'numeric',
-            timeZone: 'Etc/GMT-1' }) +
-        ' ' + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit',
-            timeZone: 'Etc/GMT-1' });
+    return date.toLocaleDateString('en-GB', { month: 'numeric', day: 'numeric', timeZone }) +
+        ' ' + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone });
 }
 
 export async function calculateOrderPriceChildren(
@@ -109,7 +109,8 @@ export async function formatOrderConfirmationChildren(
         : '-';
     const to = from; // children: pickup only
     const when = fsmData?.when
-        ? formatDateHumanUtc(fsmData.when instanceof Date ? fsmData.when : new Date(fsmData.when), nowLabel)
+        ? formatDateHuman(fsmData.when instanceof Date ? fsmData.when : new Date(fsmData.when), nowLabel,
+            orderTimeZone(fsmData.latitude, fsmData.longitude))
         : nowLabel;
 
     orderConfirmLog.debug('order confirmation when', { whenLabel: when, whenRaw: fsmData?.when });

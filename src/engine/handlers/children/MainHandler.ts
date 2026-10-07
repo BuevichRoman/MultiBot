@@ -5,7 +5,8 @@ import { ActionExecutor } from './ActionExecutor';
 import { TelegramBotPollingAdaptor, WhatsappWebPollingAdaptor } from '../../../transport';
 import TestAdapter from '../../../transport/TestAdapter/TestAdapter';
 import { parseDriverSelection, parseWhen, parseFromInput, parsePlannedBreaks } from '../../children/parsers';
-import { fsmPathFromSaveType } from './fsmStorage';
+import { fsmPathFromSaveType, getOrderInputSlice } from './fsmStorage';
+import { orderTimeZone } from '../../children/order/orderTimeZone';
 import { checkDocsNeedUpdate } from '../../children/docs/docsHelpers';
 import { getTaggedLogger } from '../../../addons/logger';
 
@@ -393,10 +394,12 @@ export class MainHandler extends BaseHandler {
 
         // order.completed, order.review — validation в JSON (mapping + choice/regex + saveAs)
 
-        // main.when: "2"/"сейчас" → null, иначе парсим время (UTC), проверяем что не в прошлом
+        // main.when: "2"/"сейчас" → null, иначе парсим время в поясе места заказа, проверяем что не в прошлом
         if (state === 'main.when') {
             const tomorrowMarker = 'завтра';
-            const parsed = parseWhen(trimmedText,60, tomorrowMarker);
+            const dataContainer = await this.fsm.getData(this.tenantId, userIdStr, botId);
+            const input = getOrderInputSlice(dataContainer);
+            const parsed = parseWhen(trimmedText, orderTimeZone(input.latitude, input.longitude), tomorrowMarker);
             if (parsed === undefined) {
                 return { event: 'error' };
             }
@@ -404,7 +407,6 @@ export class MainHandler extends BaseHandler {
             if (parsed !== null && nowUtc.getTime() > parsed.getTime()) {
                 return { event: 'error' };
             }
-            const dataContainer = await this.fsm.getData(this.tenantId, userIdStr, botId);
             setValueByPath(dataContainer, 'order.input.when', parsed);
             await this.fsm.mergeData(this.tenantId, userIdStr, dataContainer, botId);
             return { event: 'ok' };
