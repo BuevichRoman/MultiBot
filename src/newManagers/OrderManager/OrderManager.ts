@@ -199,27 +199,25 @@ export class OrderManager {
       if (!entry) continue;
 
       try {
-        if (isOutOfTime(entry)) {
-          const idField = entry.idField ?? { u_a_phone: String(entry.userId ?? entry.chatId ?? '').replace(/@.*$/, '') };
-          await this.config.cancelOrder(orderId, 'Max waiting time exceeded', idField);
-          await this.emit(entry, ORDER_STATUS_EVENTS.OUT_OF_TIME);
-          this.activeOrders.delete(orderId);
-          continue;
-        }
-
         const data = await this.config.getOrderState(orderId, entry.idField);
         if (orderManagerLoggingEnabled()) {
           orderMgrLog.debug('getOrderState', { tenantId: this.tenantId, orderId, hasData: data != null });
         }
-        if (data == null) continue;
 
-        if (isOutOfTime(entry, data)) {
+        // Время ожидания — это ожидание няни. Заказ, который няня уже
+        // приняла, по нему не отменяем: раньше через 10 минут снимался
+        // любой заказ, хоть с няней на месте (заказ 4154).
+        const current = data == null ? entry.lastEmittedEvent : deriveEvent(data);
+        const searching = current == null || current === ORDER_STATUS_EVENTS.PROCESSING;
+        if (searching && isOutOfTime(entry, data ?? undefined)) {
           const idField = entry.idField ?? { u_a_phone: String(entry.userId ?? entry.chatId ?? '').replace(/@.*$/, '') };
-          await this.config.cancelOrder(orderId, 'Max waiting time exceeded (API)', idField);
+          const reason = data == null ? 'Max waiting time exceeded' : 'Max waiting time exceeded (API)';
+          await this.config.cancelOrder(orderId, reason, idField);
           await this.emit(entry, ORDER_STATUS_EVENTS.OUT_OF_TIME);
           this.activeOrders.delete(orderId);
           continue;
         }
+        if (data == null) continue;
 
         const event = deriveEvent(data);
         if (event !== entry.lastEmittedEvent) {
