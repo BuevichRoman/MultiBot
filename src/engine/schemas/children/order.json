@@ -105,9 +105,9 @@
       "entryActions": [],
       "validation": {
         "type": "choice",
-        "allowed": ["01", "1", "2", "3", "4"],
+        "allowed": ["0", "01", "1", "2", "3", "4"],
         "mapping": {
-          "0": { "event": "cancel_reason_error" },
+          "0": { "event": "cancel_reason_0" },
           "01": { "event": "cancel_back_to_start" },
           "1": { "event": "cancel_reason_1" },
           "2": { "event": "cancel_reason_2" },
@@ -122,6 +122,7 @@
         { "event": "cancel_back_to_approved", "to": "order.approved", "actions": [] },
         { "event": "cancel_back_to_driverArrived", "to": "order.driverArrived", "actions": [] },
         { "event": "cancel_back_to_driverStarted", "to": "order.driverStarted", "actions": [] },
+        { "event": "cancel_reason_0", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
         { "event": "cancel_reason_1", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
         { "event": "cancel_reason_2", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
         { "event": "cancel_reason_3", "to": "main.default", "actions": ["cancelOrderWithReason", "sendCloseReasonSpecified"] },
