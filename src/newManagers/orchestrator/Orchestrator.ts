@@ -6,7 +6,7 @@ import defaultLogger, { MegaLogger } from '../../addons/logger';
 import { IMessageAdapter, AnyMessage, LocationMessage } from '../../transport';
 import { APIManager } from '../api/APIManager';
 import { TelegramBotPollingAdaptor, TelegramBotWebhookAdaptor, WhatsappWebPollingAdaptor } from '../../transport';
-import { OrderManager } from '../OrderManager';
+import { OrderManager, redisWatchStore } from '../OrderManager';
 import type { SystemEventPayload, RawOrderData } from '../OrderManager';
 import { DriverSearchManager } from '../DriverSearchManager';
 import { runWithRetry, TELEGRAM_RETRY_DELAYS_MS } from './retry';
@@ -149,6 +149,7 @@ class Orchestrator {
                 },
                 onSystemEvent: (payload: SystemEventPayload) => this.emitSystemEvent(tenantId, payload),
                 defaultPollIntervalMs: 5000,
+                store: this.engine?.getRedis ? redisWatchStore(this.engine.getRedis(), tenantId) : undefined,
             });
             this.orderManagers.set(tenantId, manager);
             manager.start();

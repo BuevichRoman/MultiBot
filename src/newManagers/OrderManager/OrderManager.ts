@@ -103,6 +103,8 @@ export class OrderManager {
   private readonly tenantId: string;
   private readonly config: OrderManagerConfig;
   private readonly activeOrders = new Map<string, OrderWatchEntry>();
+  /** Последнее, что записано в store по каждому заказу, — чтобы не писать без изменений */
+  private readonly saved = new Map<string, string>();
   private defaultPollIntervalMs: number;
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private readonly pollIntervalMs: number;
@@ -130,6 +132,7 @@ export class OrderManager {
       meta: opts.meta,
     };
     this.activeOrders.set(entry.orderId, entry);
+    void this.persist(entry);
     if (orderManagerLoggingEnabled()) {
       orderMgrLog.info('order registered for watching', {
         tenantId: this.tenantId,
@@ -142,7 +145,7 @@ export class OrderManager {
 
   /** Снять заказ с наблюдения */
   unregisterOrder(orderId: string): void {
-    this.activeOrders.delete(String(orderId));
+    void this.drop(String(orderId));
   }
 
   /** Детали заказа из реестра (без вызова API) */
@@ -169,7 +172,52 @@ export class OrderManager {
   /** Запустить цикл опроса (вызывается при старте оркестратора) */
   start(): void {
     if (this.intervalId != null) return;
+    void this.restore();
     this.intervalId = setInterval(() => this.tick(), this.pollIntervalMs);
+  }
+
+  /**
+   * Вернуть под наблюдение заказы, которые вёл прошлый процесс. registeredAt,
+   * последний статус и перерывы берутся из записи: таймаут не начинается
+   * заново, уже отправленные уведомления не повторяются
+   */
+  async restore(): Promise<void> {
+    if (!this.config.store) return;
+    try {
+      const entries = await this.config.store.load();
+      for (const entry of entries) {
+        if (this.activeOrders.has(entry.orderId)) continue;
+        this.activeOrders.set(entry.orderId, entry);
+        this.saved.set(entry.orderId, JSON.stringify(entry));
+      }
+      if (entries.length) orderMgrLog.info('order watches restored', { tenantId: this.tenantId, count: entries.length });
+    } catch (err) {
+      orderMgrLog.error('order watches restore failed', { tenantId: this.tenantId, error: err });
+      captureError(err, { tenantId: this.tenantId, scope: 'order-watch-restore' });
+    }
+  }
+
+  private async persist(entry: OrderWatchEntry): Promise<void> {
+    if (!this.config.store) return;
+    const json = JSON.stringify(entry);
+    if (this.saved.get(entry.orderId) === json) return;
+    try {
+      await this.config.store.save(entry);
+      this.saved.set(entry.orderId, json);
+    } catch (err) {
+      orderMgrLog.error('order watch save failed', { tenantId: this.tenantId, orderId: entry.orderId, error: err });
+    }
+  }
+
+  private async drop(orderId: string): Promise<void> {
+    this.activeOrders.delete(orderId);
+    this.saved.delete(orderId);
+    if (!this.config.store) return;
+    try {
+      await this.config.store.remove(orderId);
+    } catch (err) {
+      orderMgrLog.error('order watch remove failed', { tenantId: this.tenantId, orderId, error: err });
+    }
   }
 
   /** Остановить цикл */
@@ -214,7 +262,7 @@ export class OrderManager {
           const reason = data == null ? 'Max waiting time exceeded' : 'Max waiting time exceeded (API)';
           await this.config.cancelOrder(orderId, reason, idField);
           await this.emit(entry, ORDER_STATUS_EVENTS.OUT_OF_TIME);
-          this.activeOrders.delete(orderId);
+          await this.drop(orderId);
           continue;
         }
         if (data == null) continue;
@@ -228,7 +276,9 @@ export class OrderManager {
         await this.emitBreakChange(entry, data);
 
         if (TERMINAL_EVENTS.has(event)) {
-          this.activeOrders.delete(orderId);
+          await this.drop(orderId);
+        } else {
+          await this.persist(entry);
         }
       } catch (err) {
         // Ошибка опроса гасится намеренно — остальные заказы должны
