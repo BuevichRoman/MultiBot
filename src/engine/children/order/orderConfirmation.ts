@@ -54,7 +54,8 @@ export async function calculateOrderPriceChildren(
     // а не по текущему времени в фиксированном UTC+1
     const start = when ?? new Date();
     const startHour = DateTime.fromJSDate(start).setZone(orderTimeZone(from.latitude, from.longitude)).hour;
-    const isDayTime = startHour >= 6 && startHour < 21;
+    // Ночь 22:00–06:00 — те же границы, что у ночного поиска нянь (isNightTime)
+    const isDayTime = startHour >= 6 && startHour < 22;
     const timeRatio = isDayTime ? priceModel.constants?.time_ratio?.day : priceModel.constants?.time_ratio?.night;
 
     const bookingComments = dm.data?.data?.booking_comments || {};
