@@ -57,11 +57,12 @@ async function main() {
       new Date('2026-07-01T20:00:00Z'));
     const r = await APIManager.prototype.createDrive.call(self, {
       from: { latitude: '36.72', longitude: '-4.42' }, to: { latitude: '36.72', longitude: '-4.42' },
-      when: new Date('2026-07-01T20:00:00Z'), pricingModel,
+      when: new Date('2026-07-01T20:00:00Z'), childrenCount: 3, pricingModel,
     }, { u_a_tg: '1' });
     assert.deepStrictEqual(r, { orderId: 4300 });
     assert.strictEqual(sent.b_options.pricingModel.price, '100');
     assert.strictEqual(sent.b_options.pricingModel.options.time_ratio, 0.5);
+    assert.strictEqual(sent.b_options.childrenProfiles, '3');
     console.log('✅ Test 4: в заказ записана цена из подтверждения');
   }
 

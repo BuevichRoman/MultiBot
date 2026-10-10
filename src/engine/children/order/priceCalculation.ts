@@ -6,23 +6,57 @@ import { getTaggedLogger } from '../../../addons/logger';
 
 const priceLog = getTaggedLogger('order-price');
 
+/**
+ * Арифметика формулы цены без eval: числа, переменные из params, + - * /,
+ * унарный минус и скобки. Всё прочее — ошибка, как и неизвестная переменная.
+ */
+export function evaluateFormula(formula: string, params: PriceCalculationParams): number {
+    const tokens = formula.match(/\d*\.?\d+(?:e[+-]?\d+)?|[A-Za-z_]\w*|[-+*/()]|\S/gi) ?? [];
+    let pos = 0;
+    const fail = (why: string): never => { throw new Error(`${why} at token ${pos} in "${formula}"`); };
+
+    const factor = (): number => {
+        const t = tokens[pos++];
+        if (t === '-') return -factor();
+        if (t === '+') return factor();
+        if (t === '(') {
+            const v = expr();
+            if (tokens[pos++] !== ')') fail('missing )');
+            return v;
+        }
+        if (t !== undefined && /^\d*\.?\d/.test(t)) return Number(t);
+        if (t !== undefined && /^[A-Za-z_]/.test(t)) {
+            const v = params[t];
+            const n = typeof v === 'number' ? v : v == null || v === '' ? NaN : Number(v);
+            if (!Number.isFinite(n)) fail(`unknown variable ${t}`);
+            return n;
+        }
+        return fail(`unexpected ${t ?? 'end'}`);
+    };
+    const term = (): number => {
+        let v = factor();
+        while (tokens[pos] === '*' || tokens[pos] === '/') v = tokens[pos++] === '*' ? v * factor() : v / factor();
+        return v;
+    };
+    const expr = (): number => {
+        let v = term();
+        while (tokens[pos] === '+' || tokens[pos] === '-') v = tokens[pos++] === '+' ? v + term() : v - term();
+        return v;
+    };
+
+    const result = expr();
+    if (pos !== tokens.length) fail('trailing input');
+    return result;
+}
+
 export function calculatePrice(
     formula: string,
     params: PriceCalculationParams = {},
     _calculationType: string = 'full',
 ): string {
     try {
-        let evaluatedFormula = formula;
-        for (const [key, value] of Object.entries(params)) {
-            if (value != null) {
-                evaluatedFormula = evaluatedFormula.replace(
-                    new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-                    String(value ?? 0),
-                );
-            }
-        }
-        const result = eval(evaluatedFormula);
-        if (typeof result !== 'number' || isNaN(result)) {
+        const result = evaluateFormula(formula, params);
+        if (!Number.isFinite(result)) {
             throw new Error('Invalid calculation result');
         }
         return Math.trunc(result).toString();
