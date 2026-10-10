@@ -1,5 +1,7 @@
 import { Action } from '../../../types';
-import { calculateOrderPriceChildren, formatOrderConfirmationChildren } from '../../../children/order/orderConfirmation';
+import { calculateOrderPriceChildren, finalOrderPriceChildren, formatOrderConfirmationChildren } from '../../../children/order/orderConfirmation';
+import { orderTimeZone } from '../../../children/order/orderTimeZone';
+import { randomUUID } from 'crypto';
 import { CANCEL_REASON_KEYS } from '../../../children/settings/settingsHelpers';
 import type { ActionContext } from './types';
 import { getOrderInputSlice } from '../fsmStorage';
@@ -125,8 +127,14 @@ export async function handleRecordUnservedOrder(ctx: ActionContext): Promise<voi
     if (!draft || !ctx.apiManager?.createDrive || !ctx.apiManager?.cancelOrder) return;
 
     const idField = ctx.getIdField();
-    // Офферы няням не рассылаем: заказ отменяется сразу
-    const result = await ctx.apiManager.createDrive({ ...draft, preferredDriversList: [] }, idField);
+    // Офферы няням не рассылаем: заказ отменяется сразу. Ключ свой: это
+    // отдельная запись об отказе, а не повтор оформленного заказа
+    const result = await ctx.apiManager.createDrive({
+        ...draft,
+        preferredDriversList: [],
+        requestKey: randomUUID(),
+        timeZone: orderTimeZone(draft.from.latitude, draft.from.longitude),
+    }, idField);
     if ('error' in result) {
         orderActLog.warn('[handleRecordUnservedOrder] createDrive failed', { error: result.error });
         return;
@@ -163,12 +171,15 @@ export async function handleCreateOrder(ctx: ActionContext): Promise<void> {
 
     if (!ctx.apiManager?.createDrive) return;
 
-    // В заказ уходит та же цена, что клиент видел в подтверждении
-    const pricingModel = await calculateOrderPriceChildren(ctx.apiManager, orderDraft.from, orderDraft.from,
-        orderDraft.additionalOptions, false, orderDraft.when);
-
+    // Ключ выдаётся при показе подтверждения: повторное «1» и повтор после
+    // обрыва связи приходят с тем же ключом, и сервер вернёт тот же заказ
+    const requestKey = root?.order?.calculated?.requestKey ?? randomUUID();
     const idField = ctx.getIdField();
-    const result = await ctx.apiManager.createDrive({ ...orderDraft, pricingModel }, idField);
+    const result = await ctx.apiManager.createDrive({
+        ...orderDraft,
+        requestKey,
+        timeZone: orderTimeZone(orderDraft.from.latitude, orderDraft.from.longitude),
+    }, idField);
 
     if ('error' in result) {
         const errPhrase = await ctx.getLocalizedText('wab_errorOnOrder', '1');
@@ -249,10 +260,9 @@ export async function handleSendOrderConfirmation(ctx: ActionContext): Promise<v
     const isTestMode = user?.referrer_u_id === testRefCode;
 
     const from = { latitude: parseFloat(String(lat)), longitude: parseFloat(String(lng)) };
-    const to = { ...from };
     const additionalOptions = data.additionalOptions || [];
     const when = data.when ? new Date(data.when) : null;
-    const priceModel = await calculateOrderPriceChildren(ctx.apiManager, from, to, additionalOptions, false, when);
+    const priceModel = await calculateOrderPriceChildren(ctx.apiManager, from, additionalOptions, when);
 
     const langId = String(container?.user?.lang ?? user?.settings?.lang?.api_id ?? '1');
     const text = await formatOrderConfirmationChildren(
@@ -270,6 +280,8 @@ export async function handleSendOrderConfirmation(ctx: ActionContext): Promise<v
                 price: priceModel.price,
                 formula: priceModel.formula,
                 calculationType: priceModel.calculationType,
+                // Новый показ подтверждения — новый заказ, новый ключ
+                requestKey: randomUUID(),
             },
         },
     });
@@ -289,12 +301,11 @@ export async function handleSendOrderCompleted(ctx: ActionContext): Promise<void
         return;
     }
 
-    const from = { latitude: parseFloat(String(lat)), longitude: parseFloat(String(lng)) };
-    const to = { ...from };
-    const additionalOptions = (data.additionalOptions ?? orderDraft?.additionalOptions ?? []) as number[];
-    const startedAt = data.when ?? orderDraft?.when;
-    const priceModel = await calculateOrderPriceChildren(ctx.apiManager, from, to, additionalOptions, false,
-        startedAt ? new Date(startedAt) : null);
+    // Итог по факту считает сервер: длительность от начала до завершения
+    const orderId = container?.order?.id ?? container?.data?.order?.id;
+    const priceModel = orderId
+        ? await finalOrderPriceChildren(ctx.apiManager, orderId, ctx.getIdField())
+        : { formula: '-', price: '0', options: {}, calculationType: 'incomplete' };
 
     const dm = ctx.apiManager?.api_data_manager;
     const defaultCurrency = dm?.data?.data?.default_currency || 'EUR';

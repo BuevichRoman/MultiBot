@@ -789,7 +789,36 @@ class APIManager {
     }
 
     /**
-     * Создание заказа через API /drive (по примеру api/order.ts Order.new).
+     * Вызов серверного шаблона цены nanny_pricing (единый расчёт цены и
+     * создание заказа, см. server/script_templates/nanny_pricing.php).
+     * idField — от имени кого: без него запрос идёт от служебной учётки бота.
+     */
+    async pricingTemplate(
+        payload: Record<string, any>,
+        idField?: Record<string, string>,
+        timeout = 10000,
+    ): Promise<{ status: number; data: any }> {
+        const { createForm, postHeaders } = await import('./utils/general');
+        const axios = (await import('axios')).default;
+        const auth = { token: this.adminAuth.token, hash: this.adminAuth.u_hash };
+        const form = createForm(
+            {
+                is_var: '1',
+                s_t_data: JSON.stringify(payload),
+                ...(idField ? { ...idField, u_a_role: '1' } : {}),
+            },
+            auth as any,
+        );
+        const response = await axios.post(`${this.url}/script/template/nanny_pricing`, form, {
+            headers: postHeaders,
+            timeout,
+        });
+        return { status: response.status, data: response.data };
+    }
+
+    /**
+     * Создание заказа через шаблон nanny_pricing (action create): цену считает
+     * и пишет в заказ сервер, повтор с тем же requestKey возвращает тот же заказ.
      * @param orderDraft - черновик заказа: from, to, when, hoursCount/childrenCount, additionalOptions, preferredDriversList
      * @param idField - идентификатор клиента: { u_a_tg } | { u_a_wa } | { chatId } (как в children/index.ts)
      * @returns { orderId: number } при успехе или { error: string } при ошибке
@@ -805,8 +834,10 @@ class APIManager {
             preferredDriversList?: string[];
             /** Плановые перерывы парами `ЧЧ:ММ` (ТЗ-001 п. 5) */
             plannedBreaks?: Array<{ started: string; ended: string }>;
-            /** Цена из подтверждения заказа; без неё — прежний снимок по умолчанию */
-            pricingModel?: Record<string, any>;
+            /** Ключ запроса: повтор с ним вернёт уже созданный заказ, а не второй */
+            requestKey: string;
+            /** IANA-пояс места заказа — для дневного/ночного тарифа на сервере */
+            timeZone: string;
         },
         idField: Record<string, string>,
     ): Promise<{ orderId: number } | { error: string }> {
@@ -831,34 +862,14 @@ class APIManager {
             b_payment_way: 1,
             b_services: [],
             b_comments: orderDraft.additionalOptions ?? [],
+            // pricingModel сюда не кладём: цену в заказ пишет сервер (шаблон nanny_pricing)
             b_options: {
                 "submitPrice": 0,
                 "createdBy": "whatsapp",
-                "pricingModel": {
-                    "formula": "(base_price+distance*price_per_km+duration*price_per_minute)*time_ratio*car_class_ratio+options_sum+submit_price",
-                    "price": "200",
-                    "options": {
-                        "base_price": 200,
-                        "distance": 0,
-                        "price_per_km": 10,
-                        "duration": 0,
-                        "price_per_minute": 5,
-                        "time_ratio": 1,
-                        "options_sum": 0,
-                        "submit_price": 0,
-                        "car_class_ratio": 1
-                    },
-                    "calculationType": "incomplete"
-                },
                 // Число детей из диалога; раньше всегда уходило "2"
                 "childrenProfiles": String(orderDraft.childrenCount ?? 1)
             },
         };
-        // Раньше в заказ всегда уходил снимок выше (200, дневной тариф), какую
-        // бы цену клиент ни видел. Константы не загрузились (formula '-') — снимок остаётся
-        if (orderDraft.pricingModel && orderDraft.pricingModel.formula !== '-') {
-            data.b_options.pricingModel = orderDraft.pricingModel;
-        }
         if (orderDraft.preferredDriversList?.length) {
             data.b_only_offer = 1;
         }
@@ -906,16 +917,15 @@ class APIManager {
         });
 
         const auth = { token: this.adminAuth.token, hash: this.adminAuth.u_hash };
-        const form = createForm(
-            { data: JSON.stringify(data), ...idField, u_a_role: '1' },
-            auth as any,
-        );
 
         try {
-            const response = await axios.post(`${this.url}/drive`, form, {
-                headers: postHeaders,
-                timeout: 15000,
-            });
+            // Заказ создаёт шаблон: он же считает цену и не даёт создать второй
+            // заказ по тому же requestKey (повтор после обрыва связи, двойное «1»)
+            const response = await this.pricingTemplate(
+                { action: 'create', request_key: orderDraft.requestKey, time_zone: orderDraft.timeZone, order: data },
+                idField,
+                15000,
+            );
             if (response.status !== 200 || response.data?.status !== 'success') {
                 const errMsg = response.data?.message?.error || response.data?.message || JSON.stringify(response.data);
                 this.logger.warn(`${this.tag} [createDrive] failed`, { status: response.status, error: errMsg });
@@ -927,7 +937,10 @@ class APIManager {
                 return { error: 'Invalid order id in response' };
             }
 
-            this.logger.info(`${this.tag} [createDrive] success`, { orderId, idField });
+            const duplicate = response.data?.data?.duplicate === true;
+            this.logger.info(`${this.tag} [createDrive] success`, { orderId, idField, duplicate });
+            // Повтор: заказ и офферы уже есть с первого раза
+            if (duplicate) return { orderId };
 
             if (orderDraft.preferredDriversList?.length) {
                 for (const driverId of orderDraft.preferredDriversList) {
