@@ -1,4 +1,5 @@
 export { OrderManager } from './OrderManager';
+export { redisWatchStore } from './redisWatchStore';
 export type {
   OrderWatchEntry,
   RegisterOrderOptions,
@@ -6,5 +7,6 @@ export type {
   RawOrderData,
   OrderStatusEvent,
   SystemEventPayload,
+  OrderWatchStore,
 } from './types';
 export { ORDER_STATUS_EVENTS } from './types';

@@ -6,7 +6,7 @@
   },
   "engine": {
     "schemasPath": "src/engine/schemas",
-    "flushRedisOnStartup": true
+    "flushRedisOnStartup": false
   },
   "orchestrator": {
     "configPath": "config/orchestrator.json",

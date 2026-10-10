@@ -143,4 +143,13 @@ export interface OrderManagerConfig {
   onSystemEvent: (payload: SystemEventPayload) => Promise<void>;
   /** Интервал опроса по умолчанию (ms) */
   defaultPollIntervalMs?: number;
+  /** Где список наблюдаемых заказов переживает рестарт процесса. Без него — только память */
+  store?: OrderWatchStore;
+}
+
+/** Хранилище наблюдаемых заказов (Redis в проде) */
+export interface OrderWatchStore {
+  load(): Promise<OrderWatchEntry[]>;
+  save(entry: OrderWatchEntry): Promise<void>;
+  remove(orderId: string): Promise<void>;
 }

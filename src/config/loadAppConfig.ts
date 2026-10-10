@@ -10,7 +10,7 @@ export interface AppConfigFile {
     };
     engine?: {
         schemasPath?: string;
-        /** false — не вызывать FLUSHDB при старте (если Redis делит БД с другими приложениями). */
+        /** true — FLUSHDB при старте (стирает диалоги и наблюдение за заказами). По умолчанию выключено. */
         flushRedisOnStartup?: boolean;
     };
     orchestrator: {

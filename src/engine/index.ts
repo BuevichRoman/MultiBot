@@ -23,7 +23,9 @@ export class Engine {
     this.redis = createRedisClient(redisCfg);
     const taskRedis = createRedisClient(redisCfg);
     const schemasPath = config?.schemasPath ?? path.join('src', 'engine', 'schemas');
-    this.flushRedisOnStartup = config?.flushRedisOnStartup !== false;
+    // Очистка только по явному флагу: FLUSHDB стирает диалоги и наблюдение за
+    // заказами, а Redis на сервере может быть общим
+    this.flushRedisOnStartup = config?.flushRedisOnStartup === true;
     this.fsm = new FSMManager(this.redis, schemasPath);
     this.task = new TaskManager(taskRedis);
   }
@@ -34,7 +36,7 @@ export class Engine {
    */
   async flushRedisOnColdStart(): Promise<void> {
     if (!this.flushRedisOnStartup) {
-      engineLog.info('Redis FLUSHDB пропущен (engine.flushRedisOnStartup === false)');
+      engineLog.info('Redis FLUSHDB пропущен (engine.flushRedisOnStartup не true)');
       return;
     }
     await this.redis.flushdb();
@@ -45,6 +47,10 @@ export class Engine {
 
   getFSMManager() {
     return this.fsm;
+  }
+
+  getRedis() {
+    return this.redis;
   }
 
   getTaskManager() {
