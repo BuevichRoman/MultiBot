@@ -34,9 +34,10 @@ async function main() {
   assert.strictEqual(await price(new Date('2026-07-01T04:30:00Z')), '200');
   console.log('✅ Test 1: 06:30 по Мадриду — дневной тариф');
 
-  // --- 2. 21:30 по Мадриду — ночь (в UTC+1 было бы 20:30, день) ---
-  assert.strictEqual(await price(new Date('2026-07-01T19:30:00Z')), '100');
-  console.log('✅ Test 2: 21:30 по Мадриду — ночной тариф');
+  // --- 2. Ночь с 22:00, как у ночного поиска нянь: 21:30 — ещё день, 22:30 — ночь ---
+  assert.strictEqual(await price(new Date('2026-07-01T19:30:00Z')), '200');
+  assert.strictEqual(await price(new Date('2026-07-01T20:30:00Z')), '100');
+  console.log('✅ Test 2: 21:30 по Мадриду — день, 22:30 — ночь');
 
   // --- 3. Зимой пояс другой: 06:30 CET = 05:30Z — день ---
   assert.strictEqual(await price(new Date('2026-12-01T05:30:00Z')), '200');
