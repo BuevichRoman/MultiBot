@@ -8,6 +8,7 @@ import { calculatePrice, formatPriceFormula } from './priceCalculation';
 import { formatString } from '../../utils/formatString';
 import { getTaggedLogger } from '../../../addons/logger';
 import { orderTimeZone } from './orderTimeZone';
+import { DateTime } from 'luxon';
 
 const orderConfirmLog = getTaggedLogger('orderConfirmation');
 
@@ -29,6 +30,7 @@ export async function calculateOrderPriceChildren(
     to: Location,
     additionalOptions: number[],
     isVoting: boolean,
+    when: Date | null = null,
 ): Promise<PriceModel> {
     const dm = apiManager?.api_data_manager;
     if (!dm?.data?.data?.site_constants?.pricingModels) {
@@ -48,10 +50,11 @@ export async function calculateOrderPriceChildren(
     const duration = 0;
     const calculationType = 'incomplete' as const;
 
-    const now = new Date();
-    const gmtPlus1 = new Date(now.getTime() + 60 * 60 * 1000);
-    const currentHour = gmtPlus1.getUTCHours();
-    const isDayTime = currentHour >= 6 && currentHour < 21;
+    // Дневной или ночной тариф — по часу начала заказа в поясе места заказа,
+    // а не по текущему времени в фиксированном UTC+1
+    const start = when ?? new Date();
+    const startHour = DateTime.fromJSDate(start).setZone(orderTimeZone(from.latitude, from.longitude)).hour;
+    const isDayTime = startHour >= 6 && startHour < 21;
     const timeRatio = isDayTime ? priceModel.constants?.time_ratio?.day : priceModel.constants?.time_ratio?.night;
 
     const bookingComments = dm.data?.data?.booking_comments || {};

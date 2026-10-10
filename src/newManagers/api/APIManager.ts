@@ -805,6 +805,8 @@ class APIManager {
             preferredDriversList?: string[];
             /** Плановые перерывы парами `ЧЧ:ММ` (ТЗ-001 п. 5) */
             plannedBreaks?: Array<{ started: string; ended: string }>;
+            /** Цена из подтверждения заказа; без неё — прежний снимок по умолчанию */
+            pricingModel?: Record<string, any>;
         },
         idField: Record<string, string>,
     ): Promise<{ orderId: number } | { error: string }> {
@@ -851,6 +853,11 @@ class APIManager {
                 "childrenProfiles": "2"
             },
         };
+        // Раньше в заказ всегда уходил снимок выше (200, дневной тариф), какую
+        // бы цену клиент ни видел. Константы не загрузились (formula '-') — снимок остаётся
+        if (orderDraft.pricingModel && orderDraft.pricingModel.formula !== '-') {
+            data.b_options.pricingModel = orderDraft.pricingModel;
+        }
         if (orderDraft.preferredDriversList?.length) {
             data.b_only_offer = 1;
         }

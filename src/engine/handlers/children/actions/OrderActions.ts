@@ -163,8 +163,12 @@ export async function handleCreateOrder(ctx: ActionContext): Promise<void> {
 
     if (!ctx.apiManager?.createDrive) return;
 
+    // В заказ уходит та же цена, что клиент видел в подтверждении
+    const pricingModel = await calculateOrderPriceChildren(ctx.apiManager, orderDraft.from, orderDraft.from,
+        orderDraft.additionalOptions, false, orderDraft.when);
+
     const idField = ctx.getIdField();
-    const result = await ctx.apiManager.createDrive(orderDraft, idField);
+    const result = await ctx.apiManager.createDrive({ ...orderDraft, pricingModel }, idField);
 
     if ('error' in result) {
         const errPhrase = await ctx.getLocalizedText('wab_errorOnOrder', '1');
@@ -247,7 +251,8 @@ export async function handleSendOrderConfirmation(ctx: ActionContext): Promise<v
     const from = { latitude: parseFloat(String(lat)), longitude: parseFloat(String(lng)) };
     const to = { ...from };
     const additionalOptions = data.additionalOptions || [];
-    const priceModel = await calculateOrderPriceChildren(ctx.apiManager, from, to, additionalOptions, false);
+    const when = data.when ? new Date(data.when) : null;
+    const priceModel = await calculateOrderPriceChildren(ctx.apiManager, from, to, additionalOptions, false, when);
 
     const langId = String(container?.user?.lang ?? user?.settings?.lang?.api_id ?? '1');
     const text = await formatOrderConfirmationChildren(
@@ -287,7 +292,9 @@ export async function handleSendOrderCompleted(ctx: ActionContext): Promise<void
     const from = { latitude: parseFloat(String(lat)), longitude: parseFloat(String(lng)) };
     const to = { ...from };
     const additionalOptions = (data.additionalOptions ?? orderDraft?.additionalOptions ?? []) as number[];
-    const priceModel = await calculateOrderPriceChildren(ctx.apiManager, from, to, additionalOptions, false);
+    const startedAt = data.when ?? orderDraft?.when;
+    const priceModel = await calculateOrderPriceChildren(ctx.apiManager, from, to, additionalOptions, false,
+        startedAt ? new Date(startedAt) : null);
 
     const dm = ctx.apiManager?.api_data_manager;
     const defaultCurrency = dm?.data?.data?.default_currency || 'EUR';
