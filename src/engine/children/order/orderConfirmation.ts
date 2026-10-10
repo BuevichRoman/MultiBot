@@ -3,12 +3,12 @@
  * Детям запрашивается только точка старта (from = to), маршрут не вычисляется.
  */
 import type { Location } from '../../types/Location';
-import type { PriceModel, PriceCalculationParams } from '../../types/OrderPrice';
-import { calculatePrice, formatPriceFormula } from './priceCalculation';
+import type { PriceModel } from '../../types/OrderPrice';
+import { formatPriceFormula } from './priceCalculation';
 import { formatString } from '../../utils/formatString';
 import { getTaggedLogger } from '../../../addons/logger';
 import { orderTimeZone } from './orderTimeZone';
-import { DateTime } from 'luxon';
+import { captureError } from '../../../addons/monitoring';
 
 const orderConfirmLog = getTaggedLogger('orderConfirmation');
 
@@ -24,60 +24,52 @@ function formatDateHuman(date: Date | null, nowLabel: string, timeZone: string):
         ' ' + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone });
 }
 
+const NO_PRICE: PriceModel = { formula: '-', price: '0', options: {}, calculationType: 'incomplete' };
+
+/** Ответ шаблона nanny_pricing → PriceModel; при любой ошибке — «цены нет» */
+async function askPricing(apiManager: any, payload: Record<string, any>, idField?: Record<string, string>): Promise<PriceModel> {
+    if (!apiManager?.pricingTemplate) return NO_PRICE;
+    try {
+        const r = await apiManager.pricingTemplate(payload, idField);
+        const d = r?.data?.status === 'success' ? r.data.data : null;
+        if (!d?.formula) {
+            orderConfirmLog.warn('pricing template answered without price', { action: payload.action, message: r?.data?.message });
+            return NO_PRICE;
+        }
+        return { formula: d.formula, price: String(d.price), options: d.options ?? {}, calculationType: d.calculationType };
+    } catch (error) {
+        orderConfirmLog.error('pricing template failed', { action: payload.action, error });
+        captureError(error, { scope: `pricing-template:${payload.action}` });
+        return NO_PRICE;
+    }
+}
+
+/**
+ * Цена до создания заказа. Считает сервер (шаблон nanny_pricing, action quote):
+ * формула и константы, цены опций, день/ночь по часу начала в поясе заказа.
+ * Детям запрашивается только точка старта — distance/duration на сервере нули.
+ */
 export async function calculateOrderPriceChildren(
     apiManager: any,
     from: Location,
-    to: Location,
     additionalOptions: number[],
-    isVoting: boolean,
     when: Date | null = null,
 ): Promise<PriceModel> {
-    const dm = apiManager?.api_data_manager;
-    if (!dm?.data?.data?.site_constants?.pricingModels) {
-        return { formula: '-', price: '0', options: {}, calculationType: 'incomplete' };
-    }
+    return askPricing(apiManager, {
+        action: 'quote',
+        when: when ? when.toISOString() : null,
+        time_zone: orderTimeZone(from.latitude, from.longitude),
+        options: additionalOptions,
+    });
+}
 
-    const raw = dm.data.data.site_constants.pricingModels;
-    const pricingModels = typeof raw?.value === 'string' ? JSON.parse(raw.value || '{}') : (raw?.value ?? raw ?? {});
-    const models = pricingModels?.pricing_models;
-    if (!models) return { formula: '-', price: '0', options: {}, calculationType: 'incomplete' };
-
-    const priceModel = models[isVoting ? 'voting' : 'basic'];
-    if (!priceModel?.model?.expression) return { formula: '-', price: '0', options: {}, calculationType: 'incomplete' };
-
-    // Только точка старта — маршрут не вычисляется, distance/duration = 0
-    const distance = 0;
-    const duration = 0;
-    const calculationType = 'incomplete' as const;
-
-    // Дневной или ночной тариф — по часу начала заказа в поясе места заказа,
-    // а не по текущему времени в фиксированном UTC+1
-    const start = when ?? new Date();
-    const startHour = DateTime.fromJSDate(start).setZone(orderTimeZone(from.latitude, from.longitude)).hour;
-    // Ночь 22:00–06:00 — те же границы, что у ночного поиска нянь (isNightTime)
-    const isDayTime = startHour >= 6 && startHour < 22;
-    const timeRatio = isDayTime ? priceModel.constants?.time_ratio?.day : priceModel.constants?.time_ratio?.night;
-
-    const bookingComments = dm.data?.data?.booking_comments || {};
-    const options_sum = additionalOptions.reduce((sum, opt) => {
-        const c = bookingComments[String(opt)];
-        return sum + (c?.options?.price ?? 0);
-    }, 0);
-
-    const params: PriceCalculationParams = {
-        base_price: priceModel.constants?.base_price ?? 0,
-        distance: (distance ?? 0) / 1000,
-        price_per_km: priceModel.constants?.price_per_km ?? 0,
-        duration: (duration ?? 0) / 60,
-        price_per_minute: priceModel.constants?.price_per_minute ?? 0,
-        time_ratio: timeRatio ?? 1,
-        options_sum,
-        submit_price: 0,
-        car_class_ratio: 1,
-    };
-
-    const price = calculatePrice(priceModel.model.expression, params);
-    return { formula: priceModel.model.expression, price, options: params, calculationType };
+/** Итоговая цена завершённого заказа: длительность от начала до завершения, считает сервер */
+export async function finalOrderPriceChildren(
+    apiManager: any,
+    orderId: string | number,
+    idField?: Record<string, string>,
+): Promise<PriceModel> {
+    return askPricing(apiManager, { action: 'final', b_id: Number(orderId) }, idField);
 }
 
 export async function formatOrderConfirmationChildren(
