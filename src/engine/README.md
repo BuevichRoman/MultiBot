@@ -44,7 +44,8 @@ const task = engine.getTaskManager();
 
 3. Use `fsm.transition(tenantId, chatId, event)` to move state and get actions to execute. Actions are declarative keys — the host application (Orchestrator) should map action types to actual code (send messages, persist data, enqueue tasks, etc.).
 
-Next steps
-- Hook the engine into `Orchestrator` so incoming messages run `fsm.transition` and the returned actions are executed by adapters or task workers.
-- Implement richer action types and an action registry to map declarative actions to code.
-- Add tests that use `src/transport/TestAdapter` to validate flows.
+How it is wired today
+- `Orchestrator` already runs the engine: tenant handlers (e.g. `src/engine/handlers/children/MainHandler.ts`) call `FSMManager.transition()` on every incoming message, and `ActionExecutor` (`src/engine/handlers/children/ActionExecutor.ts`) executes the returned actions.
+- `OrderManager` (`src/newManagers/OrderManager`) polls watched orders and feeds `order_status_*` events back into the FSM.
+- Flow schemas are read at runtime from `src/engine/schemas/<tenant>/` (or `engine.schemasPath` in `config/app.json`), so a schema change needs only a restart, not a rebuild.
+- Behaviour is pinned by the scripts in `tests/` (run each with `./node_modules/.bin/ts-node -T tests/<file>.ts`); when this README and the code disagree, trust the code and the tests.

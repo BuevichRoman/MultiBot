@@ -850,7 +850,8 @@ class APIManager {
                     },
                     "calculationType": "incomplete"
                 },
-                "childrenProfiles": "2"
+                // Число детей из диалога; раньше всегда уходило "2"
+                "childrenProfiles": String(orderDraft.childrenCount ?? 1)
             },
         };
         // Раньше в заказ всегда уходил снимок выше (200, дневной тариф), какую
