@@ -10,15 +10,14 @@
  *
  *   quote  — цена до создания заказа
  *            {"action":"quote", "when":"2026-10-11 09:00:00+00:00"|null,
- *             "time_zone":"Europe/Madrid", "options":[1,4], "duration_min":120?}
- *            → data: {formula, price, options, calculationType, requestedDurationMinutes}
- *            Если передан duration_min: целое число минут ≥ 0, без округления.
- *            Дополнительные минимумы/блоки не вводятся в этом контрактном изменении.
+ *             "time_zone":"Europe/Madrid", "options":[1,4]}
+ *            → data: {formula, price, options, calculationType}
+ *            Необязательная duration_min — целое число минут ≥ 0; применяется
+ *            к существующей формуле без минимумов и округления.
  *
  *   create — создать заказ с серверной ценой, без дублей
  *            {"action":"create", "request_key":"<8-64 [A-Za-z0-9_-]>",
- *             "time_zone":"Europe/Madrid", "duration_min":120?,
- *             "order":{...как data у POST /drive...}}
+ *             "time_zone":"Europe/Madrid", "order":{...как data у POST /drive...}}
  *            → data: {b_id, duplicate, pricingModel}
  *            Повтор с тем же request_key у того же клиента в течение суток
  *            возвращает уже созданный заказ (duplicate: true), второй не создаётся.
@@ -28,8 +27,6 @@
  *            (приложение няни так показывает цену оплачиваемого времени)
  *            {"action":"final", "b_id":4200, "duration_min":95?}
  *            → data: {formula, price, options, calculationType}
- *            Длительность рассчитывается по существующей формуле без новых
- *            минимумов и правил округления.
  *            Доступно клиенту заказа, его няне и админу.
  *
  * День/ночь — по часу начала заказа в его поясе: день 06:00–22:00, как у
@@ -158,26 +155,19 @@ call_user_func(function () {
         return (string)(int)($v >= 0 ? floor($v) : ceil($v)); // как Math.trunc
     };
 
-    // duration_min is the customer's requested duration in whole minutes.
-    // Do not duplicate a minimum-duration or rounding policy here; those rules
-    // must be defined centrally after the pricing specification is finalized.
-    $requestedDuration = function ($raw) {
-        if (!is_numeric($raw) || floor((float)$raw) != (float)$raw || (float)$raw < 0) {
+    // quote: если передана длительность, подставляем её в действующую формулу.
+    $quote = function ($when, $zone, $options, $durationMin = null) use ($c, $startHour, $optionsSum, $price, $expression) {
+        if ($durationMin !== null &&
+            (!is_numeric($durationMin) || floor((float)$durationMin) != (float)$durationMin || (float)$durationMin < 0)) {
             json_exit('404', 'error', 'wrong duration_min', null);
         }
-        return (int)$raw;
-    };
-
-    // quote without a route: use the supplied planned duration in the existing tariff formula.
-    $quote = function ($when, $zone, $options, $durationMin = null) use ($c, $startHour, $optionsSum, $price, $requestedDuration, $expression) {
         $h = $startHour($when, $zone);
         $day = $h >= 6 && $h < 22;
-        $duration = $durationMin === null ? 0 : $requestedDuration($durationMin);
         $vars = array(
             'base_price'       => $c('base_price', 0),
             'distance'         => 0,
             'price_per_km'     => $c('price_per_km', 0),
-            'duration'         => $duration,
+            'duration'         => $durationMin === null ? 0 : (int)$durationMin,
             'price_per_minute' => $c('price_per_minute', 0),
             'time_ratio'       => $c($day ? 'time_ratio.day' : 'time_ratio.night', 1),
             'options_sum'      => $optionsSum($options),
@@ -185,11 +175,10 @@ call_user_func(function () {
             'car_class_ratio'  => 1,
         );
         return array(
-            'formula'                  => $expression,
-            'price'                    => $price($expression, $vars),
-            'options'                  => $vars,
-            'calculationType'          => $durationMin === null ? 'incomplete' : 'complete',
-            'requestedDurationMinutes' => $durationMin === null ? null : $duration,
+            'formula'         => $expression,
+            'price'           => $price($expression, $vars),
+            'options'         => $vars,
+            'calculationType' => $durationMin === null ? 'incomplete' : 'complete',
         );
     };
 
@@ -216,27 +205,14 @@ call_user_func(function () {
         if (empty($order)) json_exit('404', 'error', 'empty order', null);
 
         $zone = $zoneOf(isset($in['time_zone']) ? $in['time_zone'] : '');
-        $durationMin = array_key_exists('duration_min', $in) ? $in['duration_min'] : null;
-        // Bind the idempotency key to the original request data, not calculated fields.
-        $hashOrder = $order;
-        if (isset($hashOrder['b_options']) && is_array($hashOrder['b_options'])) {
-            unset($hashOrder['b_options']['pricingModel'], $hashOrder['b_options']['requestKey'], $hashOrder['b_options']['requestPayloadHash']);
-        }
-        $payloadHash = hash('sha256', json_encode(array(
-            'time_zone' => $zone,
-            'duration_min' => $durationMin,
-            'order' => $hashOrder,
-        )));
         $pm = $quote(
             isset($order['b_start_datetime']) ? $order['b_start_datetime'] : null,
             $zone,
-            isset($order['b_comments']) ? $order['b_comments'] : array(),
-            $durationMin
+            isset($order['b_comments']) ? $order['b_comments'] : array()
         );
         if (!isset($order['b_options']) || !is_array($order['b_options'])) $order['b_options'] = array();
         $order['b_options']['pricingModel'] = $pm;
         $order['b_options']['requestKey'] = $key;
-        $order['b_options']['requestPayloadHash'] = $payloadHash;
 
         // Проверка и создание под одной блокировкой: два одновременных
         // запроса с одним ключом не создадут два заказа
@@ -245,19 +221,14 @@ call_user_func(function () {
         $got = $q ? fetch_assoc($q) : null;
         if (empty($got['l'])) json_exit('404', 'error', 'order is being created, retry later', null);
 
-        $q = query("SELECT `id_order`, `options` FROM `order`
+        $q = query("SELECT `id_order` FROM `order`
             WHERE `client` = '" . $uid . "'
               AND `create_datetime` > NOW() - INTERVAL 1 DAY
               AND `options` LIKE '%\"requestKey\":\"" . real_escape_string($key) . "\"%'
             ORDER BY `id_order` DESC LIMIT 1");
         $row = $q ? fetch_assoc($q) : null;
         if (!empty($row['id_order'])) {
-            $existingOptions = json_decode(isset($row['options']) ? $row['options'] : '', true);
-            $existingHash = isset($existingOptions['requestPayloadHash']) ? $existingOptions['requestPayloadHash'] : null;
             query("SELECT RELEASE_LOCK('" . real_escape_string($lock) . "')");
-            if ($existingHash !== null && !hash_equals((string)$existingHash, $payloadHash)) {
-                json_exit('404', 'error', 'request_key payload mismatch', null);
-            }
             json_exit('200', 'success', null, array(
                 'b_id' => (int)$row['id_order'], 'duplicate' => true, 'pricingModel' => $pm,
             ));
@@ -317,19 +288,21 @@ call_user_func(function () {
             json_exit('404', 'error', 'order has no price', null);
         }
         $vars = $pm['options'];
-        if (array_key_exists('duration_min', $in)) {
-            $vars['duration'] = $requestedDuration($in['duration_min']);
+        if (isset($in['duration_min'])) {
+            if (!is_numeric($in['duration_min']) || $in['duration_min'] < 0) json_exit('404', 'error', 'wrong duration_min', null);
+            $vars['duration'] = (int)$in['duration_min'];
             $pm['options'] = $vars;
             $pm['price'] = $price($pm['formula'], $vars);
-            $pm['requestedDurationMinutes'] = $vars['duration'];
         } elseif (!empty($o['complete_datetime']) && $o['complete_datetime'] !== '0000-00-00 00:00:00') {
-            // Минуты между временем начала и завершения. Не добавляем блоки
-            // округления или минимум до утверждения общего тарифа.
+            // Минуты от планового начала до завершения, как считало приложение
+            // няни; пока заказ не завершён, цена — та, что в заказе
+            // Обе отметки — в поясе базы, разница от пояса не зависит; UTC — чтобы
+            // не зависеть от date.timezone (предупреждение ушло бы в ответ e_warning)
             $utc = new DateTimeZone('UTC');
             $from = new DateTime($o['datetime_start_plan'], $utc);
             $to = new DateTime($o['complete_datetime'], $utc);
             $mins = (int)(($to->getTimestamp() - $from->getTimestamp()) / 60);
-            $vars['duration'] = max(0, $mins);
+            $vars['duration'] = $mins;
             $pm['options'] = $vars;
             $pm['price'] = $price($pm['formula'], $vars);
         }
