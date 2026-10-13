@@ -237,6 +237,16 @@ call_user_func(function () {
 
         $zone = $zoneOf(isset($in['time_zone']) ? $in['time_zone'] : '');
         $durationMin = array_key_exists('duration_min', $in) ? $in['duration_min'] : null;
+        // Bind the idempotency key to the original request data, not calculated fields.
+        $hashOrder = $order;
+        if (isset($hashOrder['b_options']) && is_array($hashOrder['b_options'])) {
+            unset($hashOrder['b_options']['pricingModel'], $hashOrder['b_options']['requestKey'], $hashOrder['b_options']['requestPayloadHash']);
+        }
+        $payloadHash = hash('sha256', json_encode(array(
+            'time_zone' => $zone,
+            'duration_min' => $durationMin,
+            'order' => $hashOrder,
+        )));
         $pm = $quote(
             isset($order['b_start_datetime']) ? $order['b_start_datetime'] : null,
             $zone,
@@ -246,6 +256,7 @@ call_user_func(function () {
         if (!isset($order['b_options']) || !is_array($order['b_options'])) $order['b_options'] = array();
         $order['b_options']['pricingModel'] = $pm;
         $order['b_options']['requestKey'] = $key;
+        $order['b_options']['requestPayloadHash'] = $payloadHash;
 
         // Проверка и создание под одной блокировкой: два одновременных
         // запроса с одним ключом не создадут два заказа
@@ -254,14 +265,19 @@ call_user_func(function () {
         $got = $q ? fetch_assoc($q) : null;
         if (empty($got['l'])) json_exit('404', 'error', 'order is being created, retry later', null);
 
-        $q = query("SELECT `id_order` FROM `order`
+        $q = query("SELECT `id_order`, `options` FROM `order`
             WHERE `client` = '" . $uid . "'
               AND `create_datetime` > NOW() - INTERVAL 1 DAY
               AND `options` LIKE '%\"requestKey\":\"" . real_escape_string($key) . "\"%'
             ORDER BY `id_order` DESC LIMIT 1");
         $row = $q ? fetch_assoc($q) : null;
         if (!empty($row['id_order'])) {
+            $existingOptions = json_decode(isset($row['options']) ? $row['options'] : '', true);
+            $existingHash = isset($existingOptions['requestPayloadHash']) ? $existingOptions['requestPayloadHash'] : null;
             query("SELECT RELEASE_LOCK('" . real_escape_string($lock) . "')");
+            if ($existingHash !== null && !hash_equals((string)$existingHash, $payloadHash)) {
+                json_exit('404', 'error', 'request_key payload mismatch', null);
+            }
             json_exit('200', 'success', null, array(
                 'b_id' => (int)$row['id_order'], 'duplicate' => true, 'pricingModel' => $pm,
             ));
