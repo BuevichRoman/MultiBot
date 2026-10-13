@@ -1,0 +1,23 @@
+name: nanny pricing template tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "server/script_templates/nanny_pricing.php"
+      - "server/tests/nanny_pricing_test.php"
+      - ".github/workflows/nanny-pricing-test.yml"
+  push:
+    branches: [master]
+    paths:
+      - "server/script_templates/nanny_pricing.php"
+      - "server/tests/nanny_pricing_test.php"
+      - ".github/workflows/nanny-pricing-test.yml"
+
+jobs:
+  php-template-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run PHP 5.6 template tests
+        run: docker run --rm -v "$GITHUB_WORKSPACE/server:/s" -w /s php:5.6-cli php tests/nanny_pricing_test.php
