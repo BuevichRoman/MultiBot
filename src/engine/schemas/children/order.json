@@ -13,8 +13,7 @@
       "type": "sendOrderApproved"
     },
     "sendOrderDriverArrived": {
-      "type": "sendL10n",
-      "params": { "key": "wab_driverArrived", "lang": { "var": "user.lang" } }
+      "type": "sendOrderDriverArrived"
     },
     "sendOrderDriverStarted": {
       "type": "sendL10n",
@@ -34,8 +33,7 @@
       "type": "sendOrderCompleted"
     },
     "sendOrderOutOfTime": {
-      "type": "sendL10n",
-      "params": { "key": "wab_outOfTime", "lang": { "var": "user.lang" } }
+      "type": "sendOrderOutOfTime"
     },
     "sendOrderCanceled": {
       "type": "sendL10n",
