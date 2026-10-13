@@ -10,12 +10,15 @@
  *
  *   quote  — цена до создания заказа
  *            {"action":"quote", "when":"2026-10-11 09:00:00+00:00"|null,
- *             "time_zone":"Europe/Madrid", "options":[1,4]}
- *            → data: {formula, price, options, calculationType}
+ *             "time_zone":"Europe/Madrid", "options":[1,4], "duration_min":120?}
+ *            → data: {formula, price, options, calculationType, requestedDurationMinutes}
+ *            Если передан duration_min: только целые минуты, минимум 120; оплата
+ *            округляется вверх до полного 10-минутного блока, базовый минимум €30.
  *
  *   create — создать заказ с серверной ценой, без дублей
  *            {"action":"create", "request_key":"<8-64 [A-Za-z0-9_-]>",
- *             "time_zone":"Europe/Madrid", "order":{...как data у POST /drive...}}
+ *             "time_zone":"Europe/Madrid", "duration_min":120?,
+ *             "order":{...как data у POST /drive...}}
  *            → data: {b_id, duplicate, pricingModel}
  *            Повтор с тем же request_key у того же клиента в течение суток
  *            возвращает уже созданный заказ (duplicate: true), второй не создаётся.
@@ -25,6 +28,8 @@
  *            (приложение няни так показывает цену оплачиваемого времени)
  *            {"action":"final", "b_id":4200, "duration_min":95?}
  *            → data: {formula, price, options, calculationType}
+ *            Любая фактическая длительность округляется вверх до 10 минут,
+ *            минимум для расчёта — 120 минут и €30 базовой суммы.
  *            Доступно клиенту заказа, его няне и админу.
  *
  * День/ночь — по часу начала заказа в его поясе: день 06:00–22:00, как у
