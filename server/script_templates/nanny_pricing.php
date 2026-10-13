@@ -158,40 +158,21 @@ call_user_func(function () {
         return (string)(int)($v >= 0 ? floor($v) : ceil($v)); // как Math.trunc
     };
 
-    // Для tenant children цены хранятся в минимальных денежных единицах (EUR cents).
-    $billingBlockMinutes = 10;
-    $minimumDurationMinutes = 120;
-    $minimumBasePrice = 3000;
-
-    $billableDuration = function ($raw, $requireMinimum) use ($billingBlockMinutes, $minimumDurationMinutes) {
+    // duration_min is the customer's requested duration in whole minutes.
+    // Do not duplicate a minimum-duration or rounding policy here; those rules
+    // must be defined centrally after the pricing specification is finalized.
+    $requestedDuration = function ($raw) {
         if (!is_numeric($raw) || floor((float)$raw) != (float)$raw || (float)$raw < 0) {
             json_exit('404', 'error', 'wrong duration_min', null);
         }
-        $minutes = (int)$raw;
-        if ($requireMinimum && $minutes < $minimumDurationMinutes) {
-            json_exit('404', 'error', 'minimum duration is 120 minutes', null);
-        }
-        return max($minimumDurationMinutes, (int)(ceil($minutes / $billingBlockMinutes) * $billingBlockMinutes));
+        return (int)$raw;
     };
 
-    // Минимум €30 относится к базовой цене; опции добавляются поверх минимума.
-    $priceWithMinimumBase = function ($formula, $vars) use ($price, $minimumBasePrice) {
-        $total = (int)$price($formula, $vars);
-        $baseVars = $vars;
-        $baseVars['options_sum'] = 0;
-        $baseVars['submit_price'] = 0;
-        $base = (int)$price($formula, $baseVars);
-        $extras = $total - $base;
-        return (string)(max($minimumBasePrice, $base) + $extras);
-    };
-
-    // duration_min — опционален для совместимости с прежними bot-вызовами.
-    // WIMI web передаёт длительность; оплачиваются полные 10-минутные блоки,
-    // минимум 120 минут и €30 базовой суммы.
-    $quote = function ($when, $zone, $options, $durationMin = null) use ($c, $startHour, $optionsSum, $price, $priceWithMinimumBase, $billableDuration, $expression) {
+    // quote without a route: use the supplied planned duration in the existing tariff formula.
+    $quote = function ($when, $zone, $options, $durationMin = null) use ($c, $startHour, $optionsSum, $price, $requestedDuration, $expression) {
         $h = $startHour($when, $zone);
         $day = $h >= 6 && $h < 22;
-        $duration = $durationMin === null ? 0 : $billableDuration($durationMin, true);
+        $duration = $durationMin === null ? 0 : $requestedDuration($durationMin);
         $vars = array(
             'base_price'       => $c('base_price', 0),
             'distance'         => 0,
@@ -205,11 +186,10 @@ call_user_func(function () {
         );
         return array(
             'formula'                  => $expression,
-            'price'                    => $durationMin === null ? $price($expression, $vars) : $priceWithMinimumBase($expression, $vars),
+            'price'                    => $price($expression, $vars),
             'options'                  => $vars,
-            // A duration-aware nanny quote is complete for this service: there is no destination route to calculate.
             'calculationType'          => $durationMin === null ? 'incomplete' : 'complete',
-            'requestedDurationMinutes' => $durationMin === null ? null : (int)$durationMin,
+            'requestedDurationMinutes' => $durationMin === null ? null : $duration,
         );
     };
 
@@ -338,21 +318,20 @@ call_user_func(function () {
         }
         $vars = $pm['options'];
         if (array_key_exists('duration_min', $in)) {
-            $vars['duration'] = $billableDuration($in['duration_min'], false);
+            $vars['duration'] = $requestedDuration($in['duration_min']);
             $pm['options'] = $vars;
-            $pm['price'] = $priceWithMinimumBase($pm['formula'], $vars);
-            $pm['requestedDurationMinutes'] = (int)$in['duration_min'];
+            $pm['price'] = $price($pm['formula'], $vars);
+            $pm['requestedDurationMinutes'] = $vars['duration'];
         } elseif (!empty($o['complete_datetime']) && $o['complete_datetime'] !== '0000-00-00 00:00:00') {
-            // Минуты от планового начала до завершения. Округляем каждый начатый
-            // 10-минутный блок вверх и применяем минимальные 120 минут.
-            // Обе отметки — в поясе базы; разница от пояса не зависит.
+            // Минуты между временем начала и завершения. Не добавляем блоки
+            // округления или минимум до утверждения общего тарифа.
             $utc = new DateTimeZone('UTC');
             $from = new DateTime($o['datetime_start_plan'], $utc);
             $to = new DateTime($o['complete_datetime'], $utc);
             $mins = (int)(($to->getTimestamp() - $from->getTimestamp()) / 60);
-            $vars['duration'] = $billableDuration(max(0, $mins), false);
+            $vars['duration'] = max(0, $mins);
             $pm['options'] = $vars;
-            $pm['price'] = $priceWithMinimumBase($pm['formula'], $vars);
+            $pm['price'] = $price($pm['formula'], $vars);
         }
         json_exit('200', 'success', null, $pm);
     }
