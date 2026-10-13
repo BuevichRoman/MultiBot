@@ -267,6 +267,12 @@ export class ActionExecutor {
             case 'sendOrderApproved':
                 await OrderActions.handleSendOrderApproved(ctx);
                 break;
+            case 'sendOrderDriverArrived':
+                await OrderActions.handleSendOrderDriverArrived(ctx);
+                break;
+            case 'sendOrderOutOfTime':
+                await OrderActions.handleSendOrderOutOfTime(ctx);
+                break;
             case 'sendOrderProcessing':
                 await OrderActions.handleSendOrderProcessing(ctx, actionDef);
                 break;
