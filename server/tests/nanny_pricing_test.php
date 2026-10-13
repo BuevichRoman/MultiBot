@@ -73,27 +73,27 @@ $r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 04:30:00+00:00',
 check('неизвестный пояс → Europe/Madrid (06:30 — день)', $r['data']['price'] === '200');
 check('ответ в форме pricingModel', $r['data']['calculationType'] === 'incomplete' && isset($r['data']['formula'], $r['data']['options']['base_price']));
 
-// duration-aware quote: ставка 25 cents/minute, полные 10-минутные блоки и минимум €30.
+// duration-aware quote: use the requested whole-minute duration with the existing tariff formula.
 $durationModel = array('pricing_models' => array('basic' => array(
-    'constants' => array('base_price' => 0, 'price_per_km' => 0, 'price_per_minute' => 25,
+    'constants' => array('base_price' => 200, 'price_per_km' => 0, 'price_per_minute' => 5,
         'time_ratio' => array('night' => 1, 'day' => 1)),
     'model' => array('expression' => '(base_price+distance*price_per_km+duration*price_per_minute)*time_ratio*car_class_ratio+options_sum+submit_price'))));
 taxi::$data['site_constants']['pricingModels']['value'] = json_encode($durationModel);
-$durationCases = array(120 => 3000, 121 => 3250, 129 => 3250, 130 => 3250, 131 => 3500,
-    149 => 3750, 150 => 3750, 151 => 4000, 179 => 4500, 180 => 4500);
+$durationCases = array(0 => 200, 1 => 205, 119 => 795, 120 => 800, 121 => 805, 130 => 850);
 foreach ($durationCases as $minutes => $expectedPrice) {
     $r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 09:00:00+02:00',
         'time_zone' => 'Europe/Madrid', 'options' => array(), 'duration_min' => $minutes));
-    $expectedBilled = max(120, (int)(ceil($minutes / 10) * 10));
-    check('quote ' . $minutes . ' мин → ' . $expectedBilled . ' оплачиваемых минут',
+    check('quote ' . $minutes . ' мин учитывает точную длительность без округления',
         $r['status'] === 'success' && (int)$r['data']['price'] === $expectedPrice
-        && $r['data']['options']['duration'] === $expectedBilled
+        && $r['data']['options']['duration'] === $minutes
         && $r['data']['calculationType'] === 'complete');
 }
-$r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 09:00:00+02:00',
-    'time_zone' => 'Europe/Madrid', 'options' => array(), 'duration_min' => 119));
-check('quote отклоняет длительность меньше 120 минут',
-    $r['status'] === 'error' && $r['message'] === 'minimum duration is 120 minutes');
+foreach (array(-1, 1.5, 'abc') as $badDuration) {
+    $r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 09:00:00+02:00',
+        'time_zone' => 'Europe/Madrid', 'options' => array(), 'duration_min' => $badDuration));
+    check('quote отклоняет некорректную длительность ' . (string)$badDuration,
+        $r['status'] === 'error' && $r['message'] === 'wrong duration_min');
+}
 taxi::$data['site_constants']['pricingModels']['value'] = json_encode($model);
 
 // create: цена сервера в заказе, повтор не создаёт второй
@@ -120,9 +120,9 @@ $durationCreate = $api->run(array('action' => 'create', 'request_key' => 'req-du
     'time_zone' => 'Europe/Madrid', 'duration_min' => 121, 'order' => $durationOrder));
 $durationId = $durationCreate['data']['b_id'];
 $durationOptions = json_decode($ORDERS[$durationId]['options'], true);
-check('create 121 мин → 130 оплачиваемых минут и €32,50',
-    $durationCreate['status'] === 'success' && $durationCreate['data']['pricingModel']['price'] === '3250'
-    && $durationOptions['pricingModel']['options']['duration'] === 130
+check('create сохраняет точную плановую длительность 121 мин и цену по формуле',
+    $durationCreate['status'] === 'success' && $durationCreate['data']['pricingModel']['price'] === '805'
+    && $durationOptions['pricingModel']['options']['duration'] === 121
     && $durationOptions['pricingModel']['requestedDurationMinutes'] === 121);
 $durationRetry = $api->run(array('action' => 'create', 'request_key' => 'req-duration-01',
     'time_zone' => 'Europe/Madrid', 'duration_min' => 121, 'order' => $durationOrder));
@@ -136,9 +136,9 @@ check('тот же request_key с другой длительностью отк
     && $api->created === $createdBeforeDuration + 1);
 $durationInvalid = $api->run(array('action' => 'create', 'request_key' => 'req-duration-02',
     'time_zone' => 'Europe/Madrid', 'duration_min' => 119, 'order' => $durationOrder));
-check('create отклоняет длительность меньше 120 минут',
-    $durationInvalid['status'] === 'error' && $durationInvalid['message'] === 'minimum duration is 120 minutes'
-    && $api->created === $createdBeforeDuration + 1);
+check('create допускает длительность 119 минут без серверного минимума',
+    $durationInvalid['status'] === 'success' && $durationInvalid['data']['pricingModel']['options']['duration'] === 119
+    && $api->created === $createdBeforeDuration + 2);
 taxi::$data['site_constants']['pricingModels']['value'] = json_encode($model);
 
 $r = $api->run(array('action' => 'create', 'request_key' => "x' OR 1=1 --", 'order' => $order));
@@ -148,8 +148,8 @@ check('кривой request_key отклонён', $r['status'] === 'error' && $
 $id = $r1['data']['b_id'];
 $ORDERS[$id]['complete_datetime'] = '2026-07-02 01:00:00';   // 120 мин от 23:00
 $r = $api->run(array('action' => 'final', 'b_id' => $id));
-check('final: 120 мин сохраняет минимум €30 плюс опции €0.80',
-    $r['status'] === 'success' && $r['data']['price'] === '3080' && $r['data']['options']['duration'] === 120);
+check('final: фактические 120 минут рассчитываются по существующей формуле',
+    $r['status'] === 'success' && $r['data']['price'] === '480' && $r['data']['options']['duration'] === 120);
 $_SESSION[UID] = 887;
 $r = $api->run(array('action' => 'final', 'b_id' => $id));
 check('final: чужому — отказ', $r['status'] === 'error' && $r['message'] === 'not enough rights');
@@ -161,11 +161,11 @@ $ORDERS[$id]['complete_datetime'] = null;
 $r = $api->run(array('action' => 'final', 'b_id' => $id));
 check('final: не завершён — цена из заказа', $r['data']['price'] === '180');
 $r = $api->run(array('action' => 'final', 'b_id' => $id, 'duration_min' => 95));
-check('final: 95 фактических минут округляются до минимальных 120',
-    $r['data']['price'] === '3080' && $r['data']['options']['duration'] === 120);
+check('final: 95 фактических минут не округляются',
+    $r['data']['price'] === '417' && $r['data']['options']['duration'] === 95);
 $r = $api->run(array('action' => 'final', 'b_id' => $id, 'duration_min' => 121));
-check('final: 121 мин округляется до 130',
-    $r['data']['price'] === '3080' && $r['data']['options']['duration'] === 130);
+check('final: 121 мин не округляется',
+    $r['data']['price'] === '482' && $r['data']['options']['duration'] === 121);
 $r = $api->run(array('action' => 'final', 'b_id' => $id, 'duration_min' => -1));
 check('final: отрицательная длительность — ошибка', $r['message'] === 'wrong duration_min');
 
