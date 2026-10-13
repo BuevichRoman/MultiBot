@@ -110,6 +110,31 @@ $r3 = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123', 'tim
 check('тот же ключ у другого клиента — новый заказ', $r3['data']['duplicate'] === false && $api->created === 2);
 $_SESSION[UID] = 888;
 check('блокировки отпущены', $LOCKS === 0);
+
+// create с длительностью сохраняет серверную цену и оплачиваемые минуты; retry не создаёт дубль.
+taxi::$data['site_constants']['pricingModels']['value'] = json_encode($durationModel);
+$durationOrder = array('b_start_datetime' => '2026-07-01 09:00:00+02:00', 'b_comments' => array(), 'b_options' => array());
+$createdBeforeDuration = $api->created;
+$durationCreate = $api->run(array('action' => 'create', 'request_key' => 'req-duration-01',
+    'time_zone' => 'Europe/Madrid', 'duration_min' => 121, 'order' => $durationOrder));
+$durationId = $durationCreate['data']['b_id'];
+$durationOptions = json_decode($ORDERS[$durationId]['options'], true);
+check('create 121 мин → 130 оплачиваемых минут и €32,50',
+    $durationCreate['status'] === 'success' && $durationCreate['data']['pricingModel']['price'] === '3250'
+    && $durationOptions['pricingModel']['options']['duration'] === 130
+    && $durationOptions['pricingModel']['requestedDurationMinutes'] === 121);
+$durationRetry = $api->run(array('action' => 'create', 'request_key' => 'req-duration-01',
+    'time_zone' => 'Europe/Madrid', 'duration_min' => 121, 'order' => $durationOrder));
+check('create retry сохраняет тот же b_id и не создаёт второй заказ',
+    $durationRetry['data']['b_id'] === $durationId && $durationRetry['data']['duplicate'] === true
+    && $api->created === $createdBeforeDuration + 1);
+$durationInvalid = $api->run(array('action' => 'create', 'request_key' => 'req-duration-02',
+    'time_zone' => 'Europe/Madrid', 'duration_min' => 119, 'order' => $durationOrder));
+check('create отклоняет длительность меньше 120 минут',
+    $durationInvalid['status'] === 'error' && $durationInvalid['message'] === 'minimum duration is 120 minutes'
+    && $api->created === $createdBeforeDuration + 1);
+taxi::$data['site_constants']['pricingModels']['value'] = json_encode($model);
+
 $r = $api->run(array('action' => 'create', 'request_key' => "x' OR 1=1 --", 'order' => $order));
 check('кривой request_key отклонён', $r['status'] === 'error' && $r['message'] === 'wrong request_key');
 
