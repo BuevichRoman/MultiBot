@@ -87,7 +87,8 @@ foreach ($durationCases as $minutes => $expectedPrice) {
     $expectedBilled = max(120, (int)(ceil($minutes / 10) * 10));
     check('quote ' . $minutes . ' мин → ' . $expectedBilled . ' оплачиваемых минут',
         $r['status'] === 'success' && (int)$r['data']['price'] === $expectedPrice
-        && $r['data']['options']['duration'] === $expectedBilled);
+        && $r['data']['options']['duration'] === $expectedBilled
+        && $r['data']['calculationType'] === 'complete');
 }
 $r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 09:00:00+02:00',
     'time_zone' => 'Europe/Madrid', 'options' => array(), 'duration_min' => 119));
