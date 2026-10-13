@@ -20,7 +20,7 @@ function query($s) {
     if (preg_match("/RELEASE_LOCK/", $s)) { $LOCKS--; return array(array('r' => 1)); }
     if (preg_match('/requestKey":"([^"]+)"/', $s, $m) && preg_match("/`client` = '(\d+)'/", $s, $c)) {
         foreach (array_reverse($ORDERS, true) as $id => $o)
-            if ($o['client'] == $c[1] && strpos($o['options'], '"requestKey":"' . $m[1] . '"') !== false) return array(array('id_order' => $id));
+            if ($o['client'] == $c[1] && strpos($o['options'], '"requestKey":"' . $m[1] . '"') !== false) return array(array('id_order' => $id, 'options' => $o['options']));
         return array();
     }
     if (preg_match("/FROM `order_driver` WHERE `id_order` = '(\d+)' AND `id_user` = '(\d+)'/", $s, $m)) {
@@ -128,6 +128,11 @@ $durationRetry = $api->run(array('action' => 'create', 'request_key' => 'req-dur
     'time_zone' => 'Europe/Madrid', 'duration_min' => 121, 'order' => $durationOrder));
 check('create retry сохраняет тот же b_id и не создаёт второй заказ',
     $durationRetry['data']['b_id'] === $durationId && $durationRetry['data']['duplicate'] === true
+    && $api->created === $createdBeforeDuration + 1);
+$durationMismatch = $api->run(array('action' => 'create', 'request_key' => 'req-duration-01',
+    'time_zone' => 'Europe/Madrid', 'duration_min' => 130, 'order' => $durationOrder));
+check('тот же request_key с другой длительностью отклоняется',
+    $durationMismatch['status'] === 'error' && $durationMismatch['message'] === 'request_key payload mismatch'
     && $api->created === $createdBeforeDuration + 1);
 $durationInvalid = $api->run(array('action' => 'create', 'request_key' => 'req-duration-02',
     'time_zone' => 'Europe/Madrid', 'duration_min' => 119, 'order' => $durationOrder));
