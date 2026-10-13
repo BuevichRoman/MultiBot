@@ -12,6 +12,8 @@
  *            {"action":"quote", "when":"2026-10-11 09:00:00+00:00"|null,
  *             "time_zone":"Europe/Madrid", "options":[1,4]}
  *            → data: {formula, price, options, calculationType}
+ *            Необязательная duration_min — целое число минут ≥ 0; применяется
+ *            к существующей формуле без минимумов и округления.
  *
  *   create — создать заказ с серверной ценой, без дублей
  *            {"action":"create", "request_key":"<8-64 [A-Za-z0-9_-]>",
@@ -153,15 +155,19 @@ call_user_func(function () {
         return (string)(int)($v >= 0 ? floor($v) : ceil($v)); // как Math.trunc
     };
 
-    // Цена до заказа: маршрута нет, distance и duration — нули (как было в боте)
-    $quote = function ($when, $zone, $options) use ($c, $startHour, $optionsSum, $price, $expression) {
+    // quote: если передана длительность, подставляем её в действующую формулу.
+    $quote = function ($when, $zone, $options, $durationMin = null) use ($c, $startHour, $optionsSum, $price, $expression) {
+        if ($durationMin !== null &&
+            (!is_numeric($durationMin) || floor((float)$durationMin) != (float)$durationMin || (float)$durationMin < 0)) {
+            json_exit('404', 'error', 'wrong duration_min', null);
+        }
         $h = $startHour($when, $zone);
         $day = $h >= 6 && $h < 22;
         $vars = array(
             'base_price'       => $c('base_price', 0),
             'distance'         => 0,
             'price_per_km'     => $c('price_per_km', 0),
-            'duration'         => 0,
+            'duration'         => $durationMin === null ? 0 : (int)$durationMin,
             'price_per_minute' => $c('price_per_minute', 0),
             'time_ratio'       => $c($day ? 'time_ratio.day' : 'time_ratio.night', 1),
             'options_sum'      => $optionsSum($options),
@@ -172,7 +178,7 @@ call_user_func(function () {
             'formula'         => $expression,
             'price'           => $price($expression, $vars),
             'options'         => $vars,
-            'calculationType' => 'incomplete',
+            'calculationType' => $durationMin === null ? 'incomplete' : 'complete',
         );
     };
 
@@ -185,7 +191,8 @@ call_user_func(function () {
         json_exit('200', 'success', null, $quote(
             isset($in['when']) ? $in['when'] : null,
             $zone,
-            isset($in['options']) ? $in['options'] : array()
+            isset($in['options']) ? $in['options'] : array(),
+            array_key_exists('duration_min', $in) ? $in['duration_min'] : null
         ));
     }
 

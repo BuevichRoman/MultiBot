@@ -73,6 +73,28 @@ $r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 04:30:00+00:00',
 check('неизвестный пояс → Europe/Madrid (06:30 — день)', $r['data']['price'] === '200');
 check('ответ в форме pricingModel', $r['data']['calculationType'] === 'incomplete' && isset($r['data']['formula'], $r['data']['options']['base_price']));
 
+/* quote duration is optional and uses the existing formula without minimums or rounding. */
+$durationModel = array('pricing_models' => array('basic' => array(
+    'constants' => array('base_price' => 200, 'price_per_km' => 0, 'price_per_minute' => 5,
+        'time_ratio' => array('night' => 1, 'day' => 1)),
+    'model' => array('expression' => '(base_price+distance*price_per_km+duration*price_per_minute)*time_ratio*car_class_ratio+options_sum+submit_price'))));
+taxi::$data['site_constants']['pricingModels']['value'] = json_encode($durationModel);
+foreach (array(0 => 200, 1 => 205, 119 => 795, 120 => 800, 121 => 805, 130 => 850) as $minutes => $expectedPrice) {
+    $r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 09:00:00+02:00',
+        'time_zone' => 'Europe/Madrid', 'options' => array(), 'duration_min' => $minutes));
+    check('quote ' . $minutes . ' мин учитывает выбранную длительность без округления',
+        $r['status'] === 'success' && (int)$r['data']['price'] === $expectedPrice
+        && $r['data']['options']['duration'] === $minutes
+        && $r['data']['calculationType'] === 'complete');
+}
+foreach (array(-1, 1.5, 'abc') as $badDuration) {
+    $r = $api->run(array('action' => 'quote', 'when' => '2026-07-01 09:00:00+02:00',
+        'time_zone' => 'Europe/Madrid', 'options' => array(), 'duration_min' => $badDuration));
+    check('quote отклоняет некорректную длительность ' . (string)$badDuration,
+        $r['status'] === 'error' && $r['message'] === 'wrong duration_min');
+}
+taxi::$data['site_constants']['pricingModels']['value'] = json_encode($model);
+
 // create: цена сервера в заказе, повтор не создаёт второй
 $order = array('b_start_datetime' => '2026-07-01 20:30:00+00:00', 'b_comments' => array(1),
     'b_options' => array('pricingModel' => array('price' => '1'), 'createdBy' => 'whatsapp'));
