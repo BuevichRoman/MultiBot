@@ -207,7 +207,8 @@ call_user_func(function () {
             'formula'                  => $expression,
             'price'                    => $durationMin === null ? $price($expression, $vars) : $priceWithMinimumBase($expression, $vars),
             'options'                  => $vars,
-            'calculationType'          => 'incomplete',
+            // A duration-aware nanny quote is complete for this service: there is no destination route to calculate.
+            'calculationType'          => $durationMin === null ? 'incomplete' : 'complete',
             'requestedDurationMinutes' => $durationMin === null ? null : (int)$durationMin,
         );
     };
