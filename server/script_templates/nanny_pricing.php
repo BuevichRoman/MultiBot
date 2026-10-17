@@ -205,6 +205,23 @@ call_user_func(function () {
         if (empty($order)) json_exit('404', 'error', 'empty order', null);
 
         $zone = $zoneOf(isset($in['time_zone']) ? $in['time_zone'] : '');
+
+        // Hash the original request before adding server-generated fields. Sort
+        // object keys recursively so semantically identical JSON payloads with
+        // different key order produce the same hash (PHP 5.6 compatible).
+        $sortPayload = null;
+        $sortPayload = function ($value) use (&$sortPayload) {
+            if (!is_array($value)) return $value;
+            foreach ($value as $k => $v) $value[$k] = $sortPayload($v);
+            $isList = array_keys($value) === range(0, count($value) - 1);
+            if (!$isList) ksort($value);
+            return $value;
+        };
+        $payloadHash = hash('sha256', json_encode($sortPayload(array(
+            'time_zone' => $zone,
+            'order' => $order,
+        ))));
+
         $pm = $quote(
             isset($order['b_start_datetime']) ? $order['b_start_datetime'] : null,
             $zone,
@@ -213,6 +230,7 @@ call_user_func(function () {
         if (!isset($order['b_options']) || !is_array($order['b_options'])) $order['b_options'] = array();
         $order['b_options']['pricingModel'] = $pm;
         $order['b_options']['requestKey'] = $key;
+        $order['b_options']['requestPayloadHash'] = $payloadHash;
 
         // Проверка и создание под одной блокировкой: два одновременных
         // запроса с одним ключом не создадут два заказа
@@ -221,7 +239,7 @@ call_user_func(function () {
         $got = $q ? fetch_assoc($q) : null;
         if (empty($got['l'])) json_exit('404', 'error', 'order is being created, retry later', null);
 
-        $q = query("SELECT `id_order` FROM `order`
+        $q = query("SELECT `id_order`, `options` FROM `order`
             WHERE `client` = '" . $uid . "'
               AND `create_datetime` > NOW() - INTERVAL 1 DAY
               AND `options` LIKE '%\"requestKey\":\"" . real_escape_string($key) . "\"%'
@@ -229,6 +247,14 @@ call_user_func(function () {
         $row = $q ? fetch_assoc($q) : null;
         if (!empty($row['id_order'])) {
             query("SELECT RELEASE_LOCK('" . real_escape_string($lock) . "')");
+            $existingOptions = isset($row['options']) ? json_decode($row['options'], true) : null;
+            $existingHash = is_array($existingOptions) && isset($existingOptions['requestPayloadHash'])
+                ? $existingOptions['requestPayloadHash'] : null;
+            if (!is_string($existingHash) || !hash_equals($existingHash, $payloadHash)) {
+                // Never silently accept the same idempotency key for a different
+                // request, or a legacy record whose payload cannot be verified.
+                json_exit('409', 'error', 'request_key_payload_mismatch', null);
+            }
             json_exit('200', 'success', null, array(
                 'b_id' => (int)$row['id_order'], 'duplicate' => true, 'pricingModel' => $pm,
             ));
