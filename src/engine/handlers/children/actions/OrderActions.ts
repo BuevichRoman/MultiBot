@@ -1,6 +1,7 @@
 import { Action } from '../../../types';
 import { calculateOrderPriceChildren, finalOrderPriceChildren, formatOrderConfirmationChildren } from '../../../children/order/orderConfirmation';
 import { orderTimeZone } from '../../../children/order/orderTimeZone';
+import { withOrderNumber } from '../../../children/order/orderNumber';
 import { randomUUID } from 'crypto';
 import { CANCEL_REASON_KEYS } from '../../../children/settings/settingsHelpers';
 import type { ActionContext } from './types';
@@ -189,7 +190,7 @@ export async function handleCreateOrder(ctx: ActionContext): Promise<void> {
 
     await ctx.mergeData({ order: { id: result.orderId } });
     const okPhrase = await ctx.getLocalizedText('wab_orderCreated', '1');
-    await ctx.sendMessage(okPhrase);
+    await ctx.sendMessage(withOrderNumber(okPhrase, result.orderId, '1'));
 
     logBusinessEvent('order.created', {
         tenantId: ctx.tenantId,
@@ -346,6 +347,24 @@ export async function handleSendOrderApproved(ctx: ActionContext): Promise<void>
         .replace(/%model%/g, driverCar?.model ?? '-')
         .replace(/%plate%/g, driverCar?.plate ?? '-');
     await ctx.sendMessage(text);
+}
+
+export async function handleSendOrderDriverArrived(ctx: ActionContext): Promise<void> {
+    await ctx.ensureApiDataLoaded();
+    const container = await ctx.getData();
+    const orderId = container?.order?.id ?? container?.data?.order?.id;
+    const langId = String(container?.user?.lang ?? '1');
+    const driverCar = orderId ? await ctx.apiManager.getDriverAndCar?.(String(orderId), langId) : null;
+    const template = await ctx.getLocalizedText('wab_driverArrived', langId);
+    await ctx.sendMessage((template || '').replace(/%phone%/g, driverCar?.phone ?? '-'));
+}
+
+export async function handleSendOrderOutOfTime(ctx: ActionContext): Promise<void> {
+    const container = await ctx.getData();
+    const orderId = container?.order?.id ?? container?.data?.order?.id;
+    const langId = String(container?.user?.lang ?? '1');
+    const template = await ctx.getLocalizedText('wab_outOfTime', langId);
+    await ctx.sendMessage(withOrderNumber(template || '', orderId, langId));
 }
 
 export async function handleSendOrderProcessing(ctx: ActionContext, actionDef: Action): Promise<void> {

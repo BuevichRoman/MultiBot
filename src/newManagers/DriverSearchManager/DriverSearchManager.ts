@@ -15,6 +15,7 @@ import type {
 import { DRIVER_SEARCH_EVENTS } from './types';
 import { getOrderInputSlice } from '../../engine/handlers/children/fsmStorage';
 import { getTaggedLogger } from '../../addons/logger';
+import { withOrderNumber } from '../../engine/children/order/orderNumber';
 
 const drSearchLog = getTaggedLogger('DriverSearch');
 
@@ -278,6 +279,8 @@ export class DriverSearchManager {
       const noDriversLang = String((raw as { user?: { lang?: string } })?.user?.lang ?? '1');
       cancelText = await this.config.getLangValue('wab_noDriversFoundOrderCancelled', noDriversLang)
         .catch(() => 'Сожалеем, свободных нянь сейчас нет. Заказ отменён.');
+      const order = (raw as { order?: { id?: unknown }; data?: { order?: { id?: unknown } } } | null);
+      cancelText = withOrderNumber(cancelText, order?.order?.id ?? order?.data?.order?.id, noDriversLang);
     } else if (reason === 'no_drivers') {
       cancelText = 'Сожалеем, свободных нянь сейчас нет. Заказ отменён.';
     } else if (reason === 'search_cancelled') {
