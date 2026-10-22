@@ -93,7 +93,7 @@ async function main() {
 
   const quote = await postForm('nanny pricing template quote', '/script/template/nanny_pricing', {
     token,
-    hash: uHash,
+    u_hash: uHash,
     is_var: '1',
     s_t_data: JSON.stringify({
       action: 'quote',
