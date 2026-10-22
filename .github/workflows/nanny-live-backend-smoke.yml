@@ -1,0 +1,27 @@
+name: Nanny live backend smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-backend-smoke:
+    name: Read-only live API check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check live backend authentication, data access and nanny pricing
+        working-directory: .
+        env:
+          MULTIBOT_API_URL: ${{ secrets.MULTIBOT_API_URL }}
+          MULTIBOT_ADMIN_LOGIN: ${{ secrets.MULTIBOT_ADMIN_LOGIN }}
+          MULTIBOT_ADMIN_PASSWORD: ${{ secrets.MULTIBOT_ADMIN_PASSWORD }}
+        run: node tests/live_backend_smoke.mjs
