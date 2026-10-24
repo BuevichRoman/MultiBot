@@ -105,6 +105,12 @@ check('create: цена клиента заменена серверной (но
 check('create: прочие b_options сохранены', $o['createdBy'] === 'whatsapp');
 $r2 = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123', 'time_zone' => 'Europe/Madrid', 'order' => $order));
 check('повтор с тем же ключом → тот же b_id, duplicate', $r2['data']['b_id'] === $r1['data']['b_id'] && $r2['data']['duplicate'] === true && $api->created === 1);
+$orderReordered = array('b_options' => $order['b_options'], 'b_comments' => $order['b_comments'],
+    'b_start_datetime' => $order['b_start_datetime']);
+$rReordered = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123',
+    'time_zone' => 'Europe/Madrid', 'order' => $orderReordered));
+check('MAN-10: тот же payload с другим порядком ключей → duplicate', 
+    $rReordered['data']['b_id'] === $r1['data']['b_id'] && $rReordered['data']['duplicate'] === true && $api->created === 1);
 $changedOrder = $order;
 $changedOrder['b_comments'] = array(4);
 $rChanged = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123',
