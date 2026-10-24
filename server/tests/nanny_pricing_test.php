@@ -112,6 +112,13 @@ $rChanged = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123'
 check('MAN-10: тот же request_key с изменённым payload → 409, заказ не дублируется',
     $rChanged['code'] === '409' && $rChanged['status'] === 'error'
     && $rChanged['message'] === 'request_key_payload_mismatch' && $api->created === 1);
+$legacyOptions = json_decode($ORDERS[$r1['data']['b_id']]['options'], true);
+unset($legacyOptions['requestPayloadHash']);
+$ORDERS[$r1['data']['b_id']]['options'] = json_encode($legacyOptions);
+$rLegacy = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123',
+    'time_zone' => 'Europe/Madrid', 'order' => $order));
+check('MAN-10: legacy order without payload hash → 409, no duplicate', 
+    $rLegacy['code'] === '409' && $rLegacy['message'] === 'request_key_payload_mismatch' && $api->created === 1);
 $_SESSION[UID] = 999;
 $r3 = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123', 'time_zone' => 'Europe/Madrid', 'order' => $order));
 check('тот же ключ у другого клиента — новый заказ', $r3['data']['duplicate'] === false && $api->created === 2);
