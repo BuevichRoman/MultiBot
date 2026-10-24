@@ -20,7 +20,7 @@ function query($s) {
     if (preg_match("/RELEASE_LOCK/", $s)) { $LOCKS--; return array(array('r' => 1)); }
     if (preg_match('/requestKey":"([^"]+)"/', $s, $m) && preg_match("/`client` = '(\d+)'/", $s, $c)) {
         foreach (array_reverse($ORDERS, true) as $id => $o)
-            if ($o['client'] == $c[1] && strpos($o['options'], '"requestKey":"' . $m[1] . '"') !== false) return array(array('id_order' => $id));
+            if ($o['client'] == $c[1] && strpos($o['options'], '"requestKey":"' . $m[1] . '"') !== false) return array(array('id_order' => $id, 'options' => $o['options']));
         return array();
     }
     if (preg_match("/FROM `order_driver` WHERE `id_order` = '(\d+)' AND `id_user` = '(\d+)'/", $s, $m)) {
@@ -105,6 +105,13 @@ check('create: цена клиента заменена серверной (но
 check('create: прочие b_options сохранены', $o['createdBy'] === 'whatsapp');
 $r2 = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123', 'time_zone' => 'Europe/Madrid', 'order' => $order));
 check('повтор с тем же ключом → тот же b_id, duplicate', $r2['data']['b_id'] === $r1['data']['b_id'] && $r2['data']['duplicate'] === true && $api->created === 1);
+$changedOrder = $order;
+$changedOrder['b_comments'] = array(4);
+$rChanged = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123',
+    'time_zone' => 'Europe/Madrid', 'order' => $changedOrder));
+check('MAN-10: тот же request_key с изменённым payload → 409, заказ не дублируется',
+    $rChanged['code'] === '409' && $rChanged['status'] === 'error'
+    && $rChanged['message'] === 'request_key_payload_mismatch' && $api->created === 1);
 $_SESSION[UID] = 999;
 $r3 = $api->run(array('action' => 'create', 'request_key' => 'req-abc-123', 'time_zone' => 'Europe/Madrid', 'order' => $order));
 check('тот же ключ у другого клиента — новый заказ', $r3['data']['duplicate'] === false && $api->created === 2);
